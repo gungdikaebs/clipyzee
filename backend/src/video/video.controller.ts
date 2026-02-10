@@ -8,6 +8,6 @@ export class VideoController {
 
   @Post()
   create(@Body() createVideoDto: CreateVideoDto) {
-    return this.videoService.processVideo(createVideoDto.url);
+    return this.videoService.processVideo(createVideoDto.url, createVideoDto.language);
   }
 }

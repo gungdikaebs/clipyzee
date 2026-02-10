@@ -10,7 +10,7 @@ export class VideoService {
     private prisma: PrismaService,
   ) { }
 
-  async processVideo(url: string) {
+  async processVideo(url: string, language: string = 'en') {
     // 1. Save to DB (YouTube Source)
     const video = await this.prisma.video.create({
       data: {
@@ -32,6 +32,7 @@ export class VideoService {
       videoId: video.id,
       jobId: jobRecord.id,
       url: url,
+      language: language,
     });
 
     return {

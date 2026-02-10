@@ -1,1 +1,1 @@
-vosk
+openai-whisper

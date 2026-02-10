@@ -15,8 +15,8 @@ const redisConnection = {
 };
 
 const processVideo = async (job: Job) => {
-    const { videoId, jobId, url } = job.data;
-    console.log(`Processing job ${job.id} for video ${videoId} (URL: ${url})`);
+    const { videoId, jobId, url, language } = job.data;
+    console.log(`Processing job ${job.id} for video ${videoId} (URL: ${url}, Lang: ${language})`);
 
     // Ensure output directory exists
     const outputDir = path.join(__dirname, '../output');
@@ -26,7 +26,10 @@ const processVideo = async (job: Job) => {
 
     // Paths
     const tempAudioPath = path.join(outputDir, `audio-${videoId}.wav`);
-    const modelPath = path.join(__dirname, '../models/model');
+
+    // Select language (default to 'id' for Whisper as requested)
+    const lang = language || 'id';
+
     const pythonPath = path.join(__dirname, '../venv/bin/python3');
     const scriptPath = path.join(__dirname, '../scripts/transcribe.py');
 
@@ -50,8 +53,10 @@ const processVideo = async (job: Job) => {
         }
         console.log(`Audio download complete: ${tempAudioPath}`);
 
-        console.log(`Starting Transcription...`);
-        const transcribeCommand = `"${pythonPath}" "${scriptPath}" "${tempAudioPath}" "${modelPath}"`;
+        console.log(`Starting Whisper Transcription (Model: small, Lang: ${lang})...`);
+
+        // Call Python script with: python3 transcribe.py <audio_path> <language>
+        const transcribeCommand = `"${pythonPath}" "${scriptPath}" "${tempAudioPath}" "${lang}"`;
         console.log(`Executing transcription: ${transcribeCommand}`);
 
         const { stdout, stderr } = await execPromise(transcribeCommand);
@@ -68,7 +73,12 @@ const processVideo = async (job: Job) => {
             throw new Error('Invalid transcript output');
         }
 
-        console.log(`Transcription complete. Found ${transcript.length} words.`);
+        console.log(`Transcription complete. Found ${transcript.length} segments.`);
+
+        // Save transcript to JSON file (User Request)
+        const transcriptPath = path.join(outputDir, `transcript-${videoId}.json`);
+        fs.writeFileSync(transcriptPath, JSON.stringify(transcript, null, 2));
+        console.log(`Transcript saved to: ${transcriptPath}`);
 
         // Clean up audio file
         if (fs.existsSync(tempAudioPath)) {
