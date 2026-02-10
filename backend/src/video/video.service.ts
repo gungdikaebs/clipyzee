@@ -10,17 +10,17 @@ export class VideoService {
     private prisma: PrismaService,
   ) { }
 
-  async processVideo(file: Express.Multer.File) {
-    // 1. Save to DB
+  async processVideo(url: string) {
+    // 1. Save to DB (YouTube Source)
     const video = await this.prisma.video.create({
       data: {
-        originalName: file.originalname,
-        fileName: file.filename,
-        path: file.path,
+        sourceUrl: url,
+        sourceType: 'YOUTUBE',
+        title: 'Pending Title Fetch', // Worker will update this
       },
     });
 
-    // 2. Create Job in DB (status PENDING is default)
+    // 2. Create Job in DB
     const jobRecord = await this.prisma.job.create({
       data: {
         videoId: video.id,
@@ -31,11 +31,11 @@ export class VideoService {
     await this.videoQueue.add('process-video', {
       videoId: video.id,
       jobId: jobRecord.id,
-      filePath: file.path,
+      url: url,
     });
 
     return {
-      message: 'Video uploaded and queued',
+      message: 'Video URL queued for processing',
       video,
       jobId: jobRecord.id,
     };

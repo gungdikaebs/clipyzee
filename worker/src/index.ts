@@ -15,50 +15,63 @@ const redisConnection = {
 };
 
 const processVideo = async (job: Job) => {
-    const { videoId, jobId, filePath } = job.data;
-    console.log(`Processing job ${job.id} for video ${videoId}`);
+    const { videoId, jobId, url } = job.data;
+    console.log(`Processing job ${job.id} for video ${videoId} (URL: ${url})`);
+
+    // Ensure output directory exists
+    const outputDir = path.join(__dirname, '../output');
+    if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    // Temporary path for downloaded video/audio
+    const tempDownloadPath = path.join(outputDir, `download-${videoId}.mp4`);
+    // Output clip path
+    const outputClipPath = path.join(outputDir, `clip-${videoId}-${Date.now()}.mp4`);
 
     try {
-        // Resolve file path (assuming filePath is relative to backend root)
-        // worker/src/index.ts -> worker/src -> worker -> .. -> root -> backend -> filePath
-        const absoluteFilePath = path.resolve(__dirname, '../../backend', filePath);
-
-        console.log(`Resolved file path: ${absoluteFilePath}`);
-
-        if (!fs.existsSync(absoluteFilePath)) {
-            throw new Error(`File not found: ${absoluteFilePath}`);
-        }
-
         // Update status to PROCESSING
         await prisma.job.update({
             where: { id: jobId },
             data: { status: 'PROCESSING' },
         });
 
-        const outputDir = path.join(__dirname, '../output');
-        if (!fs.existsSync(outputDir)) {
-            fs.mkdirSync(outputDir, { recursive: true });
-        }
+        console.log(`Downloading from YouTube: ${url}`);
 
-        const outputFileName = `clip-${videoId}-${Date.now()}.mp4`;
-        const outputPath = path.join(outputDir, outputFileName);
+        // Command to download video (worst quality is fine for MVP speed, or best audio)
+        // For MVP, let's download best quality format that combines video+audio or just generic
+        // -f "best[ext=mp4]" ensures we get an mp4
+        const downloadCommand = `yt-dlp -f "best[ext=mp4]/best" -o "${tempDownloadPath}" "${url}"`;
+        console.log(`Executing download: ${downloadCommand}`);
+
+        await execPromise(downloadCommand);
+
+        if (!fs.existsSync(tempDownloadPath)) {
+            throw new Error(`Download failed, file not found at ${tempDownloadPath}`);
+        }
+        console.log(`Download complete: ${tempDownloadPath}`);
 
         // Dummy FFmpeg command (cutting 5 seconds)
         // Command: ffmpeg -i input.mp4 -t 5 -c copy output.mp4
-        // -y to overwrite
-        const command = `ffmpeg -i "${absoluteFilePath}" -t 5 -c copy "${outputPath}" -y`;
-        console.log(`Executing: ${command}`);
+        const ffmpegCommand = `ffmpeg -i "${tempDownloadPath}" -t 5 -c copy "${outputClipPath}" -y`;
+        console.log(`Executing FFmpeg: ${ffmpegCommand}`);
 
-        await execPromise(command);
+        await execPromise(ffmpegCommand);
 
-        console.log(`Clip created at ${outputPath}`);
+        console.log(`Clip created at ${outputClipPath}`);
+
+        // Clean up downloaded full video to save space (MVP decision)
+        if (fs.existsSync(tempDownloadPath)) {
+            fs.unlinkSync(tempDownloadPath);
+            console.log(`Deleted temp file: ${tempDownloadPath}`);
+        }
 
         // Update status to COMPLETED
         await prisma.job.update({
             where: { id: jobId },
             data: {
                 status: 'COMPLETED',
-                result: { clips: [outputPath] },
+                result: { clips: [outputClipPath] },
             },
         });
 
@@ -67,10 +80,14 @@ const processVideo = async (job: Job) => {
         console.error(`Job ${job.id} failed`, error);
         await prisma.job.update({
             where: { id: jobId },
-            data: { status: 'FAILED' }, // Could add error message to result
+            data: { status: 'FAILED' },
         });
-        // Do not rethrow if you want to avoid retry loop for fatal errors
-        // But for BullMQ, throwing marks it as failed.
+
+        // Cleanup if failed
+        if (fs.existsSync(tempDownloadPath)) {
+            fs.unlinkSync(tempDownloadPath);
+        }
+
         throw error;
     }
 };
@@ -87,4 +104,4 @@ worker.on('failed', (job, err) => {
     console.log(`${job?.id} has failed with ${err.message}`);
 });
 
-console.log('Worker started...');
+console.log('Worker started (YouTube MVP)...');
