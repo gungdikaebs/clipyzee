@@ -5,9 +5,12 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as util from 'util';
 import 'dotenv/config';
+import { selectClips } from './selector';
+import { downloadVideo, cutClip } from './video';
 
 const execPromise = util.promisify(exec);
 const prisma = new PrismaClient();
+// ... (rest of imports remains same)
 
 const redisConnection = {
     host: process.env.REDIS_HOST || 'localhost',
@@ -75,10 +78,63 @@ const processVideo = async (job: Job) => {
 
         console.log(`Transcription complete. Found ${transcript.length} segments.`);
 
+        // Rule-Based Clip Selection (MVP)
+        console.log(`Running clip selector...`);
+        const clips = selectClips(transcript);
+        console.log(`Found ${clips.length} interesting clip candidates.`);
+
         // Save transcript to JSON file (User Request)
         const transcriptPath = path.join(outputDir, `transcript-${videoId}.json`);
+        // Use fs.promises for consistency if possible, but writeFileSync is fine here as per original code style
         fs.writeFileSync(transcriptPath, JSON.stringify(transcript, null, 2));
         console.log(`Transcript saved to: ${transcriptPath}`);
+
+        // --- VIDEO CLIPPING PHASE ---
+        const finalClips: any[] = [];
+        let fullVideoPath: string | null = null;
+
+        if (clips.length > 0) {
+            try {
+                console.log(`[Video] Starting video download for joining/clipping...`);
+                fullVideoPath = await downloadVideo(url, outputDir, videoId);
+                console.log(`[Video] Full video downloaded: ${fullVideoPath}`);
+
+                for (let i = 0; i < clips.length; i++) {
+                    const clip = clips[i];
+
+                    const jobOutputDir = path.join(outputDir, jobId);
+                    if (!fs.existsSync(jobOutputDir)) {
+                        fs.mkdirSync(jobOutputDir, { recursive: true });
+                    }
+
+                    const clipFilename = `clip_${i + 1}.mp4`;
+                    const clipPath = path.join(jobOutputDir, clipFilename);
+
+                    try {
+                        await cutClip(fullVideoPath, clip.start, clip.end, clipPath);
+
+                        finalClips.push({
+                            ...clip,
+                            filePath: clipPath,
+                            duration: clip.end - clip.start
+                        });
+                        console.log(`[Video] Clip generated: ${clipPath}`);
+                    } catch (err) {
+                        console.error(`[Video] Failed to cut clip ${clipFilename}`, err);
+                    }
+                }
+            } catch (err) {
+                console.error("[Video] Processing failed", err);
+                throw err;
+            } finally {
+                // Cleanup full video
+                if (fullVideoPath && fs.existsSync(fullVideoPath)) {
+                    fs.unlinkSync(fullVideoPath);
+                    console.log(`[Video] Cleanup: Deleted full video ${fullVideoPath}`);
+                }
+            }
+        }
+
 
         // Clean up audio file
         if (fs.existsSync(tempAudioPath)) {
@@ -86,12 +142,15 @@ const processVideo = async (job: Job) => {
             console.log(`Deleted temp audio: ${tempAudioPath}`);
         }
 
-        // Update status to COMPLETED with transcript in result
+        // Update status to COMPLETED with transcript and clips in result
         await prisma.job.update({
             where: { id: jobId },
             data: {
                 status: 'COMPLETED',
-                result: { transcript },
+                result: {
+                    transcript,
+                    clips: finalClips
+                } as any,
             },
         });
 
