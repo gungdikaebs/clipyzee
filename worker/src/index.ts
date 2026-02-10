@@ -24,10 +24,11 @@ const processVideo = async (job: Job) => {
         fs.mkdirSync(outputDir, { recursive: true });
     }
 
-    // Temporary path for downloaded video/audio
-    const tempDownloadPath = path.join(outputDir, `download-${videoId}.mp4`);
-    // Output clip path
-    const outputClipPath = path.join(outputDir, `clip-${videoId}-${Date.now()}.mp4`);
+    // Paths
+    const tempAudioPath = path.join(outputDir, `audio-${videoId}.wav`);
+    const modelPath = path.join(__dirname, '../models/model');
+    const pythonPath = path.join(__dirname, '../venv/bin/python3');
+    const scriptPath = path.join(__dirname, '../scripts/transcribe.py');
 
     try {
         // Update status to PROCESSING
@@ -36,42 +37,51 @@ const processVideo = async (job: Job) => {
             data: { status: 'PROCESSING' },
         });
 
-        console.log(`Downloading from YouTube: ${url}`);
+        console.log(`Downloading Audio from YouTube: ${url}`);
 
-        // Command to download video (worst quality is fine for MVP speed, or best audio)
-        // For MVP, let's download best quality format that combines video+audio or just generic
-        // -f "best[ext=mp4]" ensures we get an mp4
-        const downloadCommand = `yt-dlp -f "best[ext=mp4]/best" -o "${tempDownloadPath}" "${url}"`;
+        // Command to download AUDIO ONLY (wav, 16khz, mono)
+        const downloadCommand = `yt-dlp -x --audio-format wav --postprocessor-args "ffmpeg:-ac 1 -ar 16000" -o "${tempAudioPath}" "${url}"`;
         console.log(`Executing download: ${downloadCommand}`);
 
         await execPromise(downloadCommand);
 
-        if (!fs.existsSync(tempDownloadPath)) {
-            throw new Error(`Download failed, file not found at ${tempDownloadPath}`);
+        if (!fs.existsSync(tempAudioPath)) {
+            throw new Error(`Download failed, file not found at ${tempAudioPath}`);
         }
-        console.log(`Download complete: ${tempDownloadPath}`);
+        console.log(`Audio download complete: ${tempAudioPath}`);
 
-        // Dummy FFmpeg command (cutting 5 seconds)
-        // Command: ffmpeg -i input.mp4 -t 5 -c copy output.mp4
-        const ffmpegCommand = `ffmpeg -i "${tempDownloadPath}" -t 5 -c copy "${outputClipPath}" -y`;
-        console.log(`Executing FFmpeg: ${ffmpegCommand}`);
+        console.log(`Starting Transcription...`);
+        const transcribeCommand = `"${pythonPath}" "${scriptPath}" "${tempAudioPath}" "${modelPath}"`;
+        console.log(`Executing transcription: ${transcribeCommand}`);
 
-        await execPromise(ffmpegCommand);
+        const { stdout, stderr } = await execPromise(transcribeCommand);
 
-        console.log(`Clip created at ${outputClipPath}`);
-
-        // Clean up downloaded full video to save space (MVP decision)
-        if (fs.existsSync(tempDownloadPath)) {
-            fs.unlinkSync(tempDownloadPath);
-            console.log(`Deleted temp file: ${tempDownloadPath}`);
+        if (stderr) {
+            console.error('Transcription stderr:', stderr);
         }
 
-        // Update status to COMPLETED
+        let transcript;
+        try {
+            transcript = JSON.parse(stdout);
+        } catch (e) {
+            console.error('Failed to parse transcript JSON:', stdout);
+            throw new Error('Invalid transcript output');
+        }
+
+        console.log(`Transcription complete. Found ${transcript.length} words.`);
+
+        // Clean up audio file
+        if (fs.existsSync(tempAudioPath)) {
+            fs.unlinkSync(tempAudioPath);
+            console.log(`Deleted temp audio: ${tempAudioPath}`);
+        }
+
+        // Update status to COMPLETED with transcript in result
         await prisma.job.update({
             where: { id: jobId },
             data: {
                 status: 'COMPLETED',
-                result: { clips: [outputClipPath] },
+                result: { transcript },
             },
         });
 
@@ -84,8 +94,8 @@ const processVideo = async (job: Job) => {
         });
 
         // Cleanup if failed
-        if (fs.existsSync(tempDownloadPath)) {
-            fs.unlinkSync(tempDownloadPath);
+        if (fs.existsSync(tempAudioPath)) {
+            fs.unlinkSync(tempAudioPath);
         }
 
         throw error;
