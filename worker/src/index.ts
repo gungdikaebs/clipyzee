@@ -2,185 +2,246 @@ import { Worker, Job } from 'bullmq';
 import { PrismaClient } from '@prisma/client';
 import { exec } from 'child_process';
 import * as path from 'path';
-import * as fs from 'fs';
+import * as fs from 'fs/promises';
+import { constants } from 'fs';
 import * as util from 'util';
 import 'dotenv/config';
-import { selectClips } from './selector';
-import { downloadVideo, cutClip } from './video';
+import bytes from 'bytes';
+import { selectClips, TranscriptSegment, ClipCandidate } from './selector';
+import { downloadVideo, extractAudio, cutClip, getVideoDuration } from './video';
 
 const execPromise = util.promisify(exec);
 const prisma = new PrismaClient();
-// ... (rest of imports remains same)
 
 const redisConnection = {
     host: process.env.REDIS_HOST || 'localhost',
     port: parseInt(process.env.REDIS_PORT || '6379'),
 };
 
-const processVideo = async (job: Job) => {
-    const { videoId, jobId, url, language } = job.data;
-    console.log(`Processing job ${job.id} for video ${videoId} (URL: ${url}, Lang: ${language})`);
+const MAX_FILE_SIZE_BYTES = 1073741824; // 1GB in bytes
+const JOB_TIMEOUT_MS = 60 * 60 * 1000; // 1 hour
+const CHUNK_SIZE_SECS = 45 * 60; // 45 minute chunks
 
-    // Ensure output directory exists
-    const outputDir = path.join(__dirname, '../output');
-    if (!fs.existsSync(outputDir)) {
-        fs.mkdirSync(outputDir, { recursive: true });
-    }
+async function checkFileExists(file: string) {
+    return fs.access(file, constants.F_OK).then(() => true).catch(() => false);
+}
 
-    // Paths
-    const tempAudioPath = path.join(outputDir, `audio-${videoId}.wav`);
-
-    // Select language (default to 'id' for Whisper as requested)
-    const lang = language || 'id';
-
+// ---------------------------------------------------------
+// Pipeline Step: Transcribe Audio
+// ---------------------------------------------------------
+async function transcribeAudio(audioPath: string, language: string): Promise<TranscriptSegment[]> {
     const pythonPath = path.join(__dirname, '../venv/bin/python3');
     const scriptPath = path.join(__dirname, '../scripts/transcribe.py');
 
+    console.log(`[Transcribe] Starting Whisper Transcription (Lang: ${language})...`);
+
+    // Using model_size="base" as configured per Whisper optimization requirements
+    const transcribeCommand = `"${pythonPath}" "${scriptPath}" "${audioPath}" "${language}" "base"`;
+
+    const { stdout, stderr } = await execPromise(transcribeCommand);
+
+    if (stderr) {
+        console.warn('[Transcribe] stderr warning:', stderr);
+    }
+
     try {
-        // Update status to PROCESSING
+        const transcript = JSON.parse(stdout);
+        if (transcript.error) {
+            throw new Error(`Whisper Error: ${transcript.error}`);
+        }
+        return transcript as TranscriptSegment[];
+    } catch (e) {
+        console.error('[Transcribe] Failed to parse transcript JSON:', stdout);
+        throw new Error('Invalid transcript output');
+    }
+}
+
+// ---------------------------------------------------------
+// Pipeline Step: Cut Clips
+// ---------------------------------------------------------
+async function processClips(fullVideoPath: string, clips: ClipCandidate[], outputDir: string, jobId: string) {
+    const jobOutputDir = path.join(outputDir, jobId);
+    await fs.mkdir(jobOutputDir, { recursive: true });
+
+    const finalClips: any[] = [];
+    console.log(`[Clipping] Found ${clips.length} interesting candidates. Starting FFmpeg cuts...`);
+
+    for (let i = 0; i < clips.length; i++) {
+        const clip = clips[i];
+        const clipFilename = `clip_${i + 1}.mp4`;
+        const clipPath = path.join(jobOutputDir, clipFilename);
+
+        try {
+            await cutClip(fullVideoPath, clip.start, clip.end, clipPath);
+
+            finalClips.push({
+                ...clip,
+                filePath: clipPath,
+                duration: clip.end - clip.start
+            });
+        } catch (err) {
+            console.error(`[Clipping] Failed to cut clip ${clipFilename}`, err);
+        }
+    }
+
+    return finalClips;
+}
+
+// ---------------------------------------------------------
+// Main Pipeline Orchestrator
+// ---------------------------------------------------------
+const processVideoWithTimeout = async (job: Job) => {
+    return Promise.race([
+        processVideo(job),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Job timeout exceeded (1 hour)')), JOB_TIMEOUT_MS))
+    ]);
+}
+
+const processVideo = async (job: Job) => {
+    const { videoId, jobId, url, language } = job.data;
+    console.log(`[Pipeline] Processing job ${job.id} for video ${videoId} (URL: ${url}, Lang: ${language})`);
+
+    const outputDir = path.join(__dirname, '../output');
+    await fs.mkdir(outputDir, { recursive: true });
+
+    const tempAudioPath = path.join(outputDir, `audio-${videoId}.wav`);
+    const transcriptPath = path.join(outputDir, `transcript-${videoId}.json`);
+    const lang = language || 'id';
+
+    let fullVideoPath: string | null = null;
+
+    try {
         await prisma.job.update({
             where: { id: jobId },
             data: { status: 'PROCESSING' },
         });
 
-        console.log(`Downloading Audio from YouTube: ${url}`);
+        // 1. Download Full Video (Single Source of Truth)
+        fullVideoPath = await downloadVideo(url, outputDir, videoId);
 
-        // Command to download AUDIO ONLY (wav, 16khz, mono)
-        const downloadCommand = `yt-dlp -x --audio-format wav --postprocessor-args "ffmpeg:-ac 1 -ar 16000" -o "${tempAudioPath}" "${url}"`;
-        console.log(`Executing download: ${downloadCommand}`);
-
-        await execPromise(downloadCommand);
-
-        if (!fs.existsSync(tempAudioPath)) {
-            throw new Error(`Download failed, file not found at ${tempAudioPath}`);
-        }
-        console.log(`Audio download complete: ${tempAudioPath}`);
-
-        console.log(`Starting Whisper Transcription (Model: small, Lang: ${lang})...`);
-
-        // Call Python script with: python3 transcribe.py <audio_path> <language>
-        const transcribeCommand = `"${pythonPath}" "${scriptPath}" "${tempAudioPath}" "${lang}"`;
-        console.log(`Executing transcription: ${transcribeCommand}`);
-
-        const { stdout, stderr } = await execPromise(transcribeCommand);
-
-        if (stderr) {
-            console.error('Transcription stderr:', stderr);
+        // 1.1 Guard: Check File Size
+        const stat = await fs.stat(fullVideoPath);
+        if (stat.size > MAX_FILE_SIZE_BYTES) {
+            throw new Error(`Video file too large: ${bytes(stat.size)}. Max allowed is 1GB.`);
         }
 
-        let transcript;
-        try {
-            transcript = JSON.parse(stdout);
-        } catch (e) {
-            console.error('Failed to parse transcript JSON:', stdout);
-            throw new Error('Invalid transcript output');
-        }
+        // 2. Fetch Duration for Chunking
+        const totalDuration = await getVideoDuration(fullVideoPath);
+        console.log(`[Pipeline] Full video duration: ${totalDuration}s`);
 
-        console.log(`Transcription complete. Found ${transcript.length} segments.`);
+        let currentTime = 0;
+        let masterClips: ClipCandidate[] = [];
+        let fullTranscript: TranscriptSegment[] = [];
 
-        // Rule-Based Clip Selection (MVP)
-        console.log(`Running clip selector...`);
-        const clips = selectClips(transcript);
-        console.log(`Found ${clips.length} interesting clip candidates.`);
+        // 3. Chronological Loop
+        while (currentTime < totalDuration) {
+            const chunkDuration = Math.min(CHUNK_SIZE_SECS, totalDuration - currentTime);
+            console.log(`[Pipeline] Processing Chunk: ${currentTime}s to ${currentTime + chunkDuration}s`);
 
-        // Save transcript to JSON file (User Request)
-        const transcriptPath = path.join(outputDir, `transcript-${videoId}.json`);
-        // Use fs.promises for consistency if possible, but writeFileSync is fine here as per original code style
-        fs.writeFileSync(transcriptPath, JSON.stringify(transcript, null, 2));
-        console.log(`Transcript saved to: ${transcriptPath}`);
+            // 3.1 Extract Audio Chunk
+            await extractAudio(fullVideoPath, tempAudioPath, currentTime, chunkDuration);
 
-        // --- VIDEO CLIPPING PHASE ---
-        const finalClips: any[] = [];
-        let fullVideoPath: string | null = null;
+            // 3.2 Transcribe Local Chunk
+            const chunkTranscript = await transcribeAudio(tempAudioPath, lang);
 
-        if (clips.length > 0) {
-            try {
-                console.log(`[Video] Starting video download for joining/clipping...`);
-                fullVideoPath = await downloadVideo(url, outputDir, videoId);
-                console.log(`[Video] Full video downloaded: ${fullVideoPath}`);
+            // 3.3 Apply Offset
+            const offsetTranscript = chunkTranscript.map(seg => ({
+                ...seg,
+                start: seg.start + currentTime,
+                end: seg.end + currentTime
+            }));
 
-                for (let i = 0; i < clips.length; i++) {
-                    const clip = clips[i];
+            fullTranscript = fullTranscript.concat(offsetTranscript);
+            console.log(`[Pipeline] Chunk Transcription complete. Found ${offsetTranscript.length} segments.`);
 
-                    const jobOutputDir = path.join(outputDir, jobId);
-                    if (!fs.existsSync(jobOutputDir)) {
-                        fs.mkdirSync(jobOutputDir, { recursive: true });
-                    }
+            // 3.4 Rule-Based Segment Selection
+            console.log(`[Selector] Running deterministic analyzer for chunk...`);
+            const chunkClips = selectClips(offsetTranscript);
+            console.log(`[Selector] Found ${chunkClips.length} candidates in chunk.`);
 
-                    const clipFilename = `clip_${i + 1}.mp4`;
-                    const clipPath = path.join(jobOutputDir, clipFilename);
+            masterClips = masterClips.concat(chunkClips);
 
-                    try {
-                        await cutClip(fullVideoPath, clip.start, clip.end, clipPath);
-
-                        finalClips.push({
-                            ...clip,
-                            filePath: clipPath,
-                            duration: clip.end - clip.start
-                        });
-                        console.log(`[Video] Clip generated: ${clipPath}`);
-                    } catch (err) {
-                        console.error(`[Video] Failed to cut clip ${clipFilename}`, err);
-                    }
-                }
-            } catch (err) {
-                console.error("[Video] Processing failed", err);
-                throw err;
-            } finally {
-                // Cleanup full video
-                if (fullVideoPath && fs.existsSync(fullVideoPath)) {
-                    fs.unlinkSync(fullVideoPath);
-                    console.log(`[Video] Cleanup: Deleted full video ${fullVideoPath}`);
-                }
+            // 3.5 Disk Safety: Cleanup chunk audio immediately
+            if (await checkFileExists(tempAudioPath)) {
+                await fs.rm(tempAudioPath, { force: true });
             }
+
+            // 4. Early Exit Constraint
+            if (masterClips.length >= 5) {
+                console.log(`[Pipeline] Early Exit Triggered! Found ${masterClips.length} clips (Target >= 5). Halting further transcriptions.`);
+                break;
+            }
+
+            currentTime += chunkDuration;
         }
 
+        // 5. Post-Process Clipy
+        masterClips.sort((a, b) => b.score - a.score);
+        const topClips = masterClips.slice(0, 10); // Standard constraint
 
-        // Clean up audio file
-        if (fs.existsSync(tempAudioPath)) {
-            fs.unlinkSync(tempAudioPath);
-            console.log(`Deleted temp audio: ${tempAudioPath}`);
+        // Save Transcript for debugging/user request
+        await fs.writeFile(transcriptPath, JSON.stringify(fullTranscript, null, 2));
+
+        // 6. Slice Video into localized clips
+        let finalClips: any[] = [];
+        if (topClips.length > 0) {
+            finalClips = await processClips(fullVideoPath, topClips, outputDir, jobId);
         }
 
-        // Update status to COMPLETED with transcript and clips in result
+        // 6. Complete
         await prisma.job.update({
             where: { id: jobId },
             data: {
                 status: 'COMPLETED',
                 result: {
-                    transcript,
+                    transcript: fullTranscript,
                     clips: finalClips
                 } as any,
             },
         });
 
-        console.log(`Job ${job.id} completed`);
+        console.log(`[Pipeline] Job ${job.id} completed successfully.`);
+
     } catch (error) {
-        console.error(`Job ${job.id} failed`, error);
+        console.error(`[Pipeline] Job ${job.id} failed:`, error);
+
         await prisma.job.update({
             where: { id: jobId },
             data: { status: 'FAILED' },
         });
 
-        // Cleanup if failed
-        if (fs.existsSync(tempAudioPath)) {
-            fs.unlinkSync(tempAudioPath);
-        }
-
         throw error;
+    } finally {
+        console.log(`[Cleanup] Initiating sequence for job ${job.id}...`);
+
+        // Robust asynchronous cleanup for disk safety
+        const filesToClean = [tempAudioPath, transcriptPath];
+        if (fullVideoPath) filesToClean.push(fullVideoPath);
+
+        for (const file of filesToClean) {
+            if (await checkFileExists(file)) {
+                try {
+                    await fs.rm(file, { force: true });
+                    console.log(`[Cleanup] Deleted ${file}`);
+                } catch (e) {
+                    console.error(`[Cleanup] Failed to delete ${file}`, e);
+                }
+            }
+        }
     }
 };
 
-const worker = new Worker('video', processVideo, {
+const worker = new Worker('video', processVideoWithTimeout, {
     connection: redisConnection,
+    concurrency: 1, // Fix: Explicitly prevent memory exhaustion from parallel Whisper tasks
 });
 
 worker.on('completed', job => {
-    console.log(`${job.id} has completed!`);
+    console.log(`[Worker] Job ${job.id} has finalized completion event.`);
 });
 
 worker.on('failed', (job, err) => {
-    console.log(`${job?.id} has failed with ${err.message}`);
+    console.log(`[Worker] Job ${job?.id} emitted failure event: ${err.message}`);
 });
 
-console.log('Worker started (YouTube MVP)...');
+console.log('Worker started (YouTube MVP - Pipeline V2)...');
