@@ -24,11 +24,12 @@ export class VideoService {
     const jobRecord = await this.prisma.job.create({
       data: {
         videoId: video.id,
+        type: 'ANALYZE',
       },
     });
 
     // 3. Add to Bull Queue
-    await this.videoQueue.add('process-video', {
+    await this.videoQueue.add('analyze-video', {
       videoId: video.id,
       jobId: jobRecord.id,
       url: url,
@@ -36,9 +37,45 @@ export class VideoService {
     });
 
     return {
-      message: 'Video URL queued for processing',
+      message: 'Video URL queued for analysis processing',
       video,
       jobId: jobRecord.id,
     };
+  }
+
+  async renderClip(dto: { videoId: string; url: string; start: number; end: number }) {
+    // 1. Create Render Job in DB
+    const jobRecord = await this.prisma.job.create({
+      data: {
+        videoId: dto.videoId,
+        type: 'RENDER',
+      },
+    });
+
+    // 2. Add to Bull Queue
+    await this.videoQueue.add('render-clip', {
+      videoId: dto.videoId,
+      jobId: jobRecord.id,
+      url: dto.url,
+      start: dto.start,
+      end: dto.end,
+    });
+
+    return {
+      message: 'Clip queued for rendering',
+      jobId: jobRecord.id,
+    };
+  }
+
+  async getJobStatus(jobId: string) {
+    const job = await this.prisma.job.findUnique({
+      where: { id: jobId }
+    });
+
+    if (!job) {
+      throw new Error(`Job not found: ${jobId}`);
+    }
+
+    return job;
   }
 }

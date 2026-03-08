@@ -35,10 +35,16 @@ enum JobStatus {
   FAILED
 }
 
+enum JobType {
+  ANALYZE
+  RENDER
+}
+
 model Job {
   id        String    @id @default(uuid())
   videoId   String
   video     Video     @relation(fields: [videoId], references: [id])
+  type      JobType   @default(ANALYZE)
   status    JobStatus @default(PENDING)
   result    Json? // Store processing result (e.g., clip paths)
   createdAt DateTime  @default(now())

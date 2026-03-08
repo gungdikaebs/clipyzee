@@ -11,22 +11,62 @@ async function checkFileExists(file: string) {
 }
 
 /**
- * Downloads the full video from YouTube as MP4.
+ * Downloads the full audio from YouTube to speed up Analysis.
  */
-export const downloadVideo = async (url: string, outputDir: string, videoId: string): Promise<string> => {
-    const outputPath = path.join(outputDir, `full-${videoId}.mp4`);
+export const downloadAudioOnly = async (url: string, outputDir: string, videoId: string): Promise<string> => {
+    const outputPath = path.join(outputDir, `audio-source-${videoId}.m4a`);
 
-    // Force MP4 format to ensure compatibility with standard players and FFmpeg concatenation if needed later.
-    const command = `yt-dlp -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "${outputPath}" "${url}"`;
+    const command = `yt-dlp -f "bestaudio[ext=m4a]/bestaudio" -o "${outputPath}" "${url}"`;
 
-    console.log(`[Video] [1/5] Downloading full video: ${outputPath}`);
+    console.log(`[Video] [1/5] Downloading audio-only source: ${outputPath}`);
     await execPromise(command);
 
     if (!(await checkFileExists(outputPath))) {
-        throw new Error(`Video download failed, file not found: ${outputPath}`);
+        throw new Error(`Audio download failed, file not found: ${outputPath}`);
     }
 
     return outputPath;
+};
+
+/**
+ * Renders a specific timeline directly using yt-dlp section download.
+ */
+export const downloadClip = async (url: string, outputDir: string, jobId: string, startSec: number, endSec: number): Promise<string> => {
+    // Determine bounds in HH:MM:SS format
+    const formatTime = (totalSeconds: number) => {
+        const h = Math.floor(totalSeconds / 3600);
+        const m = Math.floor((totalSeconds % 3600) / 60);
+        const s = Math.floor(totalSeconds % 60);
+        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    };
+
+    const startFormatted = formatTime(startSec);
+    const endFormatted = formatTime(endSec);
+    const timeSafePath = `${startFormatted.replace(/:/g, '-')}_${endFormatted.replace(/:/g, '-')}`;
+
+    // We utilize %(title)s placeholder directly in yt-dlp alongside our start/end
+    const outputPath = path.join(outputDir, `%(title)s_${timeSafePath}.%(ext)s`);
+
+    // Specific yt-dlp scheme as defined by user constraints
+    const command = `yt-dlp -f "bv*[height<=1080][fps>=60]+ba/bv*[height<=1080]+ba/bv*+ba/b" --download-sections "*${startFormatted}-${endFormatted}" --merge-output-format mp4 -o "${outputPath}" "${url}"`;
+
+    console.log(`[Render] Initiating targeted download for ${startFormatted} to ${endFormatted}`);
+    await execPromise(command);
+
+    // Because yt-dlp uses %(title)s, we don't precisely know the exact filename.
+    // However, yt-dlp writes stdout indicating the destination.
+    // A simpler way is to query the directory for the latest file created, or use '--print filename'.
+
+    // Let's run a quick discovery to find what it actually outputted
+    const findCmd = `ls -t "${outputDir}" | grep "${timeSafePath}.mp4" | head -n 1`;
+    const { stdout } = await execPromise(findCmd);
+    const generatedFileName = stdout.trim();
+
+    if (!generatedFileName) {
+        throw new Error(`Failed to locate the targeted download clip in ${outputDir}`);
+    }
+
+    return path.join(outputDir, generatedFileName);
 };
 
 /**
