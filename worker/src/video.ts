@@ -44,26 +44,22 @@ export const downloadClip = async (url: string, outputDir: string, jobId: string
     const endFormatted = formatTime(endSec);
     const timeSafePath = `${startFormatted.replace(/:/g, '-')}_${endFormatted.replace(/:/g, '-')}`;
 
-    // We utilize %(title)s placeholder directly in yt-dlp alongside our start/end
-    const outputPath = path.join(outputDir, `%(title)s_${timeSafePath}.%(ext)s`);
+    // Use deterministic naming invariant with Job ID instead of YouTube title
+    const filePrefix = `clip_${jobId}_${timeSafePath}`;
+    const outputPath = path.join(outputDir, `${filePrefix}.%(ext)s`);
 
     // Specific yt-dlp scheme as defined by user constraints
     const command = `yt-dlp -f "bv*[height<=1080][fps>=60]+ba/bv*[height<=1080]+ba/bv*+ba/b" --download-sections "*${startFormatted}-${endFormatted}" --merge-output-format mp4 -o "${outputPath}" "${url}"`;
 
-    console.log(`[Render] Initiating targeted download for ${startFormatted} to ${endFormatted}`);
+    console.log(`[Render] Initiating targeted download for ${startFormatted} to ${endFormatted} with prefix ${filePrefix}`);
     await execPromise(command);
 
-    // Because yt-dlp uses %(title)s, we don't precisely know the exact filename.
-    // However, yt-dlp writes stdout indicating the destination.
-    // A simpler way is to query the directory for the latest file created, or use '--print filename'.
-
-    // Let's run a quick discovery to find what it actually outputted
-    const findCmd = `ls -t "${outputDir}" | grep "${timeSafePath}.mp4" | head -n 1`;
-    const { stdout } = await execPromise(findCmd);
-    const generatedFileName = stdout.trim();
+    // Robust discovery using Node.JS native fs instead of brittle Bash ls/grep
+    const files = await fs.readdir(outputDir);
+    const generatedFileName = files.find(file => file.startsWith(filePrefix));
 
     if (!generatedFileName) {
-        throw new Error(`Failed to locate the targeted download clip in ${outputDir}`);
+        throw new Error(`Failed to locate the targeted download clip starting with ${filePrefix} in ${outputDir}`);
     }
 
     return path.join(outputDir, generatedFileName);

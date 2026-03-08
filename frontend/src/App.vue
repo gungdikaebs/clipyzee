@@ -1,35 +1,53 @@
 <template>
   <v-app>
+    <div class="animated-bg"></div>
+
     <!-- App Bar -->
-    <v-app-bar color="primary" elevation="2">
-      <v-toolbar-title class="font-weight-bold">
-        <v-icon icon="mdi-video-vintage" class="mr-2"></v-icon>
-        Clipyzee MVP: 2-Phase Engine
+    <v-app-bar class="glass-header" elevation="0">
+      <v-toolbar-title class="font-weight-bold d-flex align-center">
+        <v-icon icon="mdi-video-vintage" class="mr-3 text-primary"></v-icon>
+        <span class="gradient-text text-h5 font-weight-black">Clipyzee MVP</span>
+        <v-chip class="ml-4 bg-surface text-secondary font-weight-medium border" size="small" variant="flat">
+          2-Phase Engine
+        </v-chip>
       </v-toolbar-title>
     </v-app-bar>
 
     <!-- Main Content -->
-    <v-main class="bg-background">
-      <v-container>
+    <v-main class="bg-background relative-content">
+      <v-container class="pt-8 pb-12">
         <!-- Configuration Card -->
-        <v-card class="mb-6 elevation-2 rounded-lg pa-4">
+        <v-card class="mb-8 glass-card rounded-xl pa-2" elevation="10">
           <v-card-text>
-            <div class="text-h6 mb-4">Phase 1: Analysis & Extraction</div>
-            <v-row>
+            <div class="d-flex align-center mb-6">
+              <v-avatar color="primary" variant="tonal" class="mr-4">
+                <v-icon icon="mdi-rocket-launch"></v-icon>
+              </v-avatar>
+              <div>
+                <h2 class="text-h5 font-weight-bold text-white mb-1">Phase 1: Analysis & Extraction</h2>
+                <div class="text-subtitle-2 text-grey-lighten-1">Enter a YouTube link to begin AI clipping breakdown.</div>
+              </div>
+            </div>
+            
+            <v-row class="px-2 pb-2">
               <v-col cols="12" md="9">
                 <v-text-field
                   v-model="videoUrl"
                   label="Paste YouTube Link Here"
+                  placeholder="https://www.youtube.com/watch?v=..."
                   prepend-inner-icon="mdi-link"
-                  variant="outlined"
+                  variant="solo-filled"
+                  bg-color="rgba(0,0,0,0.2)"
                   hide-details
+                  rounded="lg"
                   :disabled="isProcessing"
+                  class="text-body-1"
                 ></v-text-field>
               </v-col>
               <v-col cols="12" md="3" class="d-flex align-center">
                 <v-btn
-                  color="success"
-                  size="large"
+                  class="gradient-btn text-white font-weight-bold rounded-lg"
+                  size="x-large"
                   block
                   :loading="isProcessing"
                   @click="startProcessing"
@@ -46,28 +64,28 @@
         <v-row>
           <!-- Live Logs -->
           <v-col cols="12" md="6">
-            <v-card class="h-100 elevation-2 rounded-lg" style="min-height: 400px;">
-              <v-card-title class="bg-grey-darken-4 d-flex align-center">
-                <v-icon icon="mdi-console" class="mr-2" size="small"></v-icon>
-                Processing Logs
+            <v-card class="h-100 glass-card rounded-xl d-flex flex-column" elevation="10" style="min-height: 500px;">
+              <v-card-title class="d-flex align-center py-4 px-6 border-b border-opacity-25">
+                <v-icon icon="mdi-console" class="mr-3 text-info" size="small"></v-icon>
+                <span class="font-weight-bold text-subtitle-1">Processing Logs</span>
                 <v-spacer></v-spacer>
                 <v-progress-circular
                   v-if="isProcessing"
                   indeterminate
-                  size="20"
+                  size="24"
                   width="2"
-                  color="warning"
+                  color="secondary"
                 ></v-progress-circular>
               </v-card-title>
-              <v-card-text class="bg-black pa-0">
+              <v-card-text class="pa-0 flex-grow-1 bg-black opacity-80" style="border-bottom-left-radius: 24px; border-bottom-right-radius: 24px;">
                 <v-textarea
                   v-model="logs"
                   readonly
                   no-resize
-                  class="font-monospace text-caption"
-                  rows="20"
+                  class="font-monospace text-caption h-100"
+                  rows="22"
                   variant="solo"
-                  bg-color="black"
+                  bg-color="transparent"
                   hide-details
                 ></v-textarea>
               </v-card-text>
@@ -76,39 +94,43 @@
 
           <!-- AI Results / Clip Candidates -->
           <v-col cols="12" md="6">
-            <v-card class="h-100 elevation-2 rounded-lg" style="min-height: 400px;">
-              <v-card-title class="bg-grey-darken-3 d-flex align-center">
-                <v-icon icon="mdi-timeline-clock" class="mr-2" size="small"></v-icon>
-                Phase 2: Clip Candidates
-                <v-chip class="ml-4" color="info" size="small" v-if="clips.length > 0">
+            <v-card class="h-100 glass-card rounded-xl" elevation="10" style="min-height: 500px;">
+              <v-card-title class="d-flex align-center py-4 px-6 border-b border-opacity-25">
+                <v-icon icon="mdi-timeline-clock" class="mr-3 text-success" size="small"></v-icon>
+                <span class="font-weight-bold text-subtitle-1">Phase 2: Clip Candidates</span>
+                <v-spacer></v-spacer>
+                <v-chip color="success" variant="flat" size="small" class="font-weight-bold px-3" v-if="clips.length > 0">
                   {{ clips.length }} Found
                 </v-chip>
               </v-card-title>
               
-              <v-card-text class="pa-0" style="max-height: 500px; overflow-y: auto;">
-                <v-list v-if="clips.length > 0" lines="three">
-                  <v-list-item v-for="(clip, index) in clips" :key="index">
+              <v-card-text class="pa-0" style="max-height: 550px; overflow-y: auto;">
+                <v-list v-if="clips.length > 0" lines="three" bg-color="transparent" class="pa-0">
+                  <v-list-item v-for="(clip, index) in clips" :key="index" class="hover-item px-6 py-5">
                     <template v-slot:prepend>
-                      <v-avatar color="primary" class="text-white font-weight-bold">
+                      <v-avatar color="rgba(99, 102, 241, 0.15)" size="48" class="mr-4 text-primary font-weight-black border border-primary border-opacity-50">
                         #{{ index + 1 }}
                       </v-avatar>
                     </template>
-                    <v-list-item-title class="font-weight-bold pt-1">
+                    <v-list-item-title class="font-weight-bold text-body-1 mb-1 d-flex align-center">
+                      <v-icon icon="mdi-clock-outline" size="small" class="mr-2 text-grey"></v-icon>
                       {{ formatTime(clip.start) }} - {{ formatTime(clip.end) }}
-                      <v-chip size="x-small" color="orange" class="ml-2">Score: {{ clip.score }}</v-chip>
+                      <v-chip size="small" :color="clip.score > 80 ? 'success' : 'warning'" variant="tonal" class="ml-4 font-weight-bold">
+                        Score: {{ clip.score }}
+                      </v-chip>
                     </v-list-item-title>
-                    <v-list-item-subtitle class="mt-1 pb-1">
-                      <span class="text-white">{{ clip.reason }}</span>
+                    <v-list-item-subtitle class="mt-2 text-grey-lighten-2 text-body-2" style="white-space: normal; line-height: 1.5; opacity: 1;">
+                      {{ clip.reason }}
                     </v-list-item-subtitle>
                     
-                    <div class="mt-3 mb-2 d-flex">
+                    <div class="mt-4 mb-1 d-flex">
                        <v-btn 
                          size="small" 
-                         color="blue-lighten-1" 
-                         variant="tonal" 
-                         prepend-icon="mdi-youtube" 
+                         color="white" 
+                         variant="outlined" 
+                         prepend-icon="mdi-play-circle" 
                          @click="openPreview(clip)"
-                         class="mr-3"
+                         class="mr-3 rounded-lg text-none"
                        >
                          Preview
                        </v-btn>
@@ -119,18 +141,22 @@
                          prepend-icon="mdi-download" 
                          :loading="clip.isDownloading" 
                          @click="downloadClip(clip)"
+                         class="rounded-lg text-none font-weight-bold px-4"
                        >
-                         Download Render
+                         Render & Download
                        </v-btn>
                     </div>
 
-                    <v-divider v-if="index !== clips.length - 1" class="mt-2"></v-divider>
+                    <v-divider v-if="index !== clips.length - 1" class="mt-5 border-opacity-25"></v-divider>
                   </v-list-item>
                 </v-list>
-                <div v-else class="pa-8 text-center text-grey">
-                  <v-icon icon="mdi-sleep" size="x-large" class="mb-2"></v-icon>
-                  <div>No clips processed yet.</div>
-                  <div class="text-caption mt-1">Submit a video link to begin AI analysis.</div>
+                
+                <div v-else class="h-100 d-flex flex-column align-center justify-center pa-8 text-center" style="min-height: 400px;">
+                  <v-avatar color="rgba(255,255,255,0.05)" size="90" class="mb-6">
+                    <v-icon icon="mdi-movie-search-outline" size="50" color="grey-darken-1"></v-icon>
+                  </v-avatar>
+                  <div class="text-h6 text-grey-lighten-1 font-weight-medium mb-2">No clips generated yet</div>
+                  <div class="text-body-2 text-grey">Submit a video link above to begin the AI analysis engine.</div>
                 </div>
               </v-card-text>
             </v-card>
@@ -293,7 +319,74 @@ const pollRenderJob = async (jobId: string, clip: ClipCandidate) => {
 </script>
 
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap');
+
+html, body, .v-application {
+  font-family: 'Inter', sans-serif !important;
+}
+
 .font-monospace {
-  font-family: monospace;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.glass-card {
+  background: rgba(17, 24, 39, 0.7) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.glass-header {
+  background: rgba(11, 15, 25, 0.8) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.gradient-text {
+  background: linear-gradient(to right, #6366F1, #EC4899);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-btn {
+  background: linear-gradient(45deg, #6366F1, #EC4899) !important;
+  border: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.gradient-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -6px rgba(99, 102, 241, 0.6);
+}
+
+.animated-bg {
+  position: fixed;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  z-index: 0;
+  background: radial-gradient(circle at 15% 50%, rgba(99, 102, 241, 0.15), transparent 25%),
+              radial-gradient(circle at 85% 30%, rgba(236, 72, 153, 0.15), transparent 25%);
+  pointer-events: none;
+  animation: pulse-bg 15s infinite alternate ease-in-out;
+}
+
+@keyframes pulse-bg {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(1.1); opacity: 1; }
+}
+
+.relative-content {
+  position: relative;
+  z-index: 1;
+}
+
+.hover-item {
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.hover-item:hover {
+  background: rgba(255, 255, 255, 0.03);
+  transform: translateX(4px);
 }
 </style>

@@ -10,6 +10,21 @@ export default createVuetify({
     directives,
     theme: {
         defaultTheme: 'dark',
+        themes: {
+            dark: {
+                dark: true,
+                colors: {
+                    background: '#0B0F19', // Deep dark blue
+                    surface: '#111827', // Sleek dark gray
+                    primary: '#6366F1', // Indigo
+                    secondary: '#EC4899', // Pink
+                    success: '#10B981', // Emerald
+                    warning: '#F59E0B',
+                    error: '#EF4444',
+                    info: '#3B82F6',
+                }
+            }
+        }
     },
     icons: {
         defaultSet: 'mdi',
