@@ -17,10 +17,11 @@ const MIN_DURATION = 30;    // Absolute minimum seconds
 const MAX_DURATION = 60;    // Absolute maximum seconds
 const EVAL_STEP_SECS = 5;   // Sliding window advance frequency
 
-// Emotional Keywords
-const STRONG_WORDS = ["anjir", "gila", "kok bisa", "serius", "jujur", "capek", "ngapain", "parah"];
+// Emotional Keywords & Hooks
+const CONFLICT_WORDS = ["anjir", "gila", "serius", "jujur", "capek", "parah", "hancur", "mustahil", "bangsat", "goblok", "sial"];
+const HOOK_WORDS = ["bayangin", "dengerin", "ternyata", "rahasia", "alasan", "fakta", "solusi", "gimana cara", "tahu gak", "pernah mikir"];
 const LAUGH_WORDS = ["wkwk", "haha", "hahaha"];
-const FILLERS = ["oke", "ya", "nah", "eh", "gitu", "kayak", "emang"];
+const FILLERS = ["oke", "ya", "nah", "eh", "gitu", "kayak", "emang", "hmm", "enggak"];
 
 /**
  * Calculates the percentage of filler words inside a text segment.
@@ -35,28 +36,37 @@ function computeFillerDensity(words: string[]): number {
  * Validates if the text string contains any significant emotional markers (+2 signals).
  */
 function hasEmotionalMarkers(text: string): boolean {
+    const lowerText = text.toLowerCase();
     const hasExclamation = text.includes('!');
     const hasAllCaps = /\b[A-Z]{3,}\b/.test(text); // Finds acronyms/shouting
-    const hasLaughs = LAUGH_WORDS.some(lw => text.toLowerCase().includes(lw));
+    const hasLaughs = LAUGH_WORDS.some(lw => lowerText.includes(lw));
+    const hasHooks = HOOK_WORDS.some(hw => lowerText.includes(hw));
 
-    return hasExclamation || hasAllCaps || hasLaughs;
+    return hasExclamation || hasAllCaps || hasLaughs || hasHooks;
 }
 
 /**
  * Determines the numeric retention score for a given window of text.
  * Requires a score >= 5 to be considered viable.
  */
-function calculateScore(text: string): { score: number, traits: string[] } {
+function calculateScore(text: string, duration: number = 0): { score: number, traits: string[] } {
     let score = 0;
     const traits: string[] = [];
     const lowerText = text.toLowerCase();
     const words = text.split(/\s+/).filter(w => w.length > 0);
 
     // +3: Strong Conflict Words
-    const foundStrong = STRONG_WORDS.filter(w => lowerText.includes(w));
-    if (foundStrong.length > 0) {
+    const foundConflict = CONFLICT_WORDS.filter(w => lowerText.includes(w));
+    if (foundConflict.length > 0) {
         score += 3;
-        traits.push(`Conflict (${foundStrong[0]})`);
+        traits.push(`Conflict (${foundConflict[0]})`);
+    }
+
+    // +2: Hook Words
+    const foundHook = HOOK_WORDS.filter(w => lowerText.includes(w));
+    if (foundHook.length > 0) {
+        score += 2;
+        traits.push(`Hook (${foundHook[0]})`);
     }
 
     // +2: Exclamation Marks
@@ -75,6 +85,15 @@ function calculateScore(text: string): { score: number, traits: string[] } {
     if (LAUGH_WORDS.some(lw => lowerText.includes(lw))) {
         score += 2;
         traits.push('Laughter');
+    }
+
+    // +2: Speaking Rate (WPS - energetic speech)
+    if (duration > 0) {
+        const wps = words.length / duration;
+        if (wps > 2.5) { // Empirically, > 2.5 words/sec can indicate high energy
+            score += 2;
+            traits.push('Energetic/Fast Paced');
+        }
     }
 
     // +1: Short Shock Sentence (implies rapid engagement if window started abruptly)
@@ -143,11 +162,13 @@ export function selectClips(transcript: TranscriptSegment[]): ClipCandidate[] {
         let j = i;
         let windowText = "";
         let currentDuration = 0;
-        let foundCandidate = true; // Flips to false if we don't trigger anything
+        let foundCandidate = false; // FLIPPED TO FALSE: Fixed logic bug
 
         // PRE-CHECK: Early Trigger Logic
         // If the starting segment houses an immediate trigger word, force a window creation.
-        const containsUrgentHook = STRONG_WORDS.some(w => startSegment.text.toLowerCase().includes(w));
+        const startTextLower = startSegment.text.toLowerCase();
+        const containsUrgentHook = CONFLICT_WORDS.some(w => startTextLower.includes(w)) ||
+            HOOK_WORDS.some(w => startTextLower.includes(w));
 
         while (j < transcript.length) {
             const segment = transcript[j];
@@ -160,11 +181,16 @@ export function selectClips(transcript: TranscriptSegment[]): ClipCandidate[] {
             windowText += " " + segment.text;
 
             // Reached evaluation territory?
-            // If we hit target duration OR we hit min duration with an Early Trigger
             if (currentDuration >= MIN_DURATION && currentDuration <= MAX_DURATION) {
-                if (currentDuration >= TARGET_DURATION || containsUrgentHook || j === transcript.length - 1) {
 
-                    const { score, traits } = calculateScore(windowText);
+                // Pause gap detection: try cutting when there's a natural breath/pause (> 0.4s) or punctuation
+                const isCleanCut = /[.!?]$/.test(segment.text.trim()) ||
+                    (j < transcript.length - 1 && transcript[j + 1].start - segment.end >= 0.4) ||
+                    j === transcript.length - 1;
+
+                if (isCleanCut && (currentDuration >= TARGET_DURATION || containsUrgentHook || j === transcript.length - 1)) {
+
+                    const { score, traits } = calculateScore(windowText, currentDuration);
                     const fillerRatio = computeFillerDensity(windowText.toLowerCase().split(/\s+/));
 
                     if (score >= 5 && fillerRatio <= 0.3) {
@@ -202,9 +228,9 @@ export function selectClips(transcript: TranscriptSegment[]): ClipCandidate[] {
     // Post-Process: De-duplicate and rank
     let bestClips = removeOverlaps(candidates);
 
-    // Sort descending by score again (technically already sorted by removal map, but enforcing strictly here)
+    // Sort descending by score again
     bestClips.sort((a, b) => b.score - a.score);
 
-    // Hard Limit to Top 5-10 Output constraint (Choosing 10 max)
+    // Hard Limit to Top 5-10 Output constraint
     return bestClips.slice(0, 10);
 }
