@@ -4,6 +4,7 @@
 
     <!-- Sidebar Navigation Drawer -->
     <v-navigation-drawer
+      v-if="!isEditorRoute"
       permanent
       width="260"
       color="#0F0F12"
@@ -59,6 +60,7 @@
 
     <!-- Top App Bar Header -->
     <v-app-bar
+      v-if="!isEditorRoute"
       color="#0F0F12"
       elevation="0"
       height="70"
@@ -139,12 +141,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useWorkspace } from './composables/useWorkspace'
 
 const route = useRoute()
 const router = useRouter()
+
+const isEditorRoute = computed(() => {
+  return route.path.startsWith('/studio/editor/')
+})
 
 const { isExtractingVideo, extractionProgress } = useWorkspace()
 

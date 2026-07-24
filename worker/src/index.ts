@@ -148,8 +148,12 @@ const handleAnalyzeJob = async (job: Job) => {
             const chunkClips = llmCandidates.map(c => ({
                 start: parseTimeToSeconds(c.start),
                 end: parseTimeToSeconds(c.end),
+                title: c.title || 'Untitled Clip',
                 reason: c.reason,
                 score: c.score,
+                hookScore: c.hookScore || c.score,
+                flowScore: c.flowScore || c.score,
+                emojiMap: c.emojiMap || {},
             }));
 
             masterClips = masterClips.concat(chunkClips);

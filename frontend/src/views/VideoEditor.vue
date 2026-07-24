@@ -39,7 +39,7 @@
             <video
               v-if="activeClip && activeClip.rawVideoPath"
               id="editor-video-player"
-              :src="`${apiBase}/video/download?path=${encodeURIComponent(activeClip.rawVideoPath || '')}`"
+              :src="`${API_BASE}/video/download?path=${encodeURIComponent(activeClip.rawVideoPath || '')}`"
               controls
               class="absolute-center"
               :style="playerWrapperStyle"
@@ -193,6 +193,23 @@
                     ></v-select>
                   </v-col>
                 </v-row>
+                
+                <!-- Split button action -->
+                <v-row dense class="mt-2">
+                  <v-col cols="12">
+                    <v-btn
+                      size="small"
+                      color="error"
+                      variant="tonal"
+                      block
+                      prepend-icon="mdi-scissors-cutting"
+                      @click="splitSegmentAtWord(activeSegmentIndex, selectedWordIndex)"
+                      class="text-none font-weight-bold rounded-lg"
+                    >
+                      Split Segment Here
+                    </v-btn>
+                  </v-col>
+                </v-row>
               </div>
 
               <!-- Live Styled Text Preview inside the sidebar card inspector -->
@@ -242,24 +259,65 @@
       </v-col>
     </v-row>
 
-    <!-- Timeline block scrollbar -->
+    <!-- Timeline block scrollbar (CapCut style) -->
     <div class="mt-4 px-6 py-3 bg-black bg-opacity-40 border border-white border-opacity-5 rounded-xl">
-      <div class="text-caption font-weight-bold mb-2 text-grey d-flex align-center">
-        <v-icon icon="mdi-ruler-square" class="mr-2" size="small"></v-icon> Video Timeline Track
+      <div class="text-caption font-weight-bold mb-2 text-grey d-flex justify-space-between align-center">
+        <span class="d-flex align-center">
+          <v-icon icon="mdi-ruler-square" class="mr-2" size="small"></v-icon> Video Timeline Track
+        </span>
+        <span class="text-caption text-grey">Click on empty track areas to seek / scrub video playhead</span>
       </div>
-      <div class="timeline-track d-flex overflow-x-auto py-2 align-center" style="gap: 8px; min-height: 70px;">
-        <div
-          v-for="(seg, idx) in editingSegments"
-          :key="idx"
-          :class="['timeline-block', 'pa-2', 'rounded', 'border', 'transition-all', 'cursor-pointer', activeSegmentIndex === idx ? 'active-block border-primary bg-primary bg-opacity-20' : 'border-white border-opacity-5 bg-white bg-opacity-5']"
-          style="min-width: 140px; flex: 1 0 auto;"
-          @click="selectSegment(idx)"
+      
+      <div 
+        id="timeline-scroll-container" 
+        class="overflow-x-auto py-3 relative-content" 
+        style="position: relative; min-height: 80px; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);"
+      >
+        <div 
+          id="timeline-scrub-track"
+          class="position-relative" 
+          :style="{
+            width: `${(activeClip.end - activeClip.start) * 20}px`,
+            height: '60px'
+          }"
+          @click="onTimelineTrackClick"
+          style="cursor: pointer;"
         >
-          <div class="text-caption text-grey text-truncate font-weight-bold" style="font-size: 10px !important;">
-            {{ formatTime(seg.start) }} - {{ formatTime(seg.end) }}
+          <!-- Playhead indicator line -->
+          <div 
+            class="position-absolute bg-primary" 
+            :style="{
+              left: `${(playerCurrentTime - activeClip.start) * 20}px`,
+              width: '2px',
+              height: '100%',
+              top: '0',
+              zIndex: 10,
+              transition: 'left 0.1s linear',
+              boxShadow: '0 0 8px #FF6B4A'
+            }"
+          >
+            <div style="width: 8px; height: 8px; background: #FF6B4A; border-radius: 50%; margin-left: -3px; margin-top: -3px;"></div>
           </div>
-          <div class="text-caption text-white text-truncate font-weight-medium mt-0.5">
-            {{ seg.text }}
+
+          <!-- Absolute positioned segment blocks -->
+          <div
+            v-for="(seg, idx) in editingSegments"
+            :key="idx"
+            :class="['timeline-block', 'position-absolute', 'pa-2', 'rounded', 'border', 'transition-all', 'overflow-hidden', activeSegmentIndex === idx ? 'active-block border-primary bg-primary bg-opacity-20' : 'border-white border-opacity-5 bg-white bg-opacity-5']"
+            :style="{
+              left: `${(seg.start - activeClip.start) * 20}px`,
+              width: `${(seg.end - seg.start) * 20}px`,
+              height: '46px',
+              top: '7px'
+            }"
+            @click.stop="selectSegment(idx)"
+          >
+            <div class="text-caption text-grey text-truncate font-weight-bold" style="font-size: 9px !important; line-height: 1;">
+              {{ formatTime(seg.start) }} - {{ formatTime(seg.end) }}
+            </div>
+            <div class="text-caption text-white text-truncate font-weight-medium mt-0.5" style="font-size: 11px !important; line-height: 1.2;">
+              {{ seg.text }}
+            </div>
           </div>
         </div>
       </div>
@@ -279,11 +337,11 @@ import { useWorkspace } from '../composables/useWorkspace'
 const props = defineProps<{
   videoId: string;
   clipIndex: string;
-  apiBase: string;
 }>()
 
 const router = useRouter()
 const {
+  API_BASE,
   clips,
   currentEditingClipIndex,
   fullTranscript,
@@ -544,7 +602,16 @@ const activeSubtitleWords = computed(() => {
       // reactive dependency tracking
     }
   })
-  return words
+  
+  const t = playerCurrentTime.value
+  const activeIdx = words.findIndex((w: any) => t >= w.start && t <= w.end)
+  if (activeIdx === -1) {
+    return words.slice(0, 4)
+  }
+  
+  const start = Math.max(0, activeIdx - 1)
+  const end = Math.min(words.length, activeIdx + 3)
+  return words.slice(start, end)
 })
 
 const isWordActiveSpoken = (w: any) => {
@@ -766,4 +833,66 @@ const formatTime = (seconds: number): string => {
   const s = Math.floor(seconds % 60)
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
 }
+
+const onTimelineTrackClick = (e: MouseEvent) => {
+  if (!activeClip.value) return
+  const track = document.getElementById('timeline-scrub-track') as HTMLDivElement | null
+  if (!track) return
+  const rect = track.getBoundingClientRect()
+  const clickX = e.clientX - rect.left
+  const relativeClickSeconds = clickX / 20
+  const targetAbsoluteTime = activeClip.value.start + relativeClickSeconds
+  
+  const video = document.getElementById('editor-video-player') as HTMLVideoElement | null
+  if (video) {
+    video.currentTime = Math.max(0, targetAbsoluteTime - activeClip.value.start)
+    playerCurrentTime.value = targetAbsoluteTime
+  }
+}
+
+const splitSegmentAtWord = (segIdx: number, wordIdx: number) => {
+  const seg = editingSegments.value[segIdx]
+  if (!seg || !seg.words || seg.words.length <= 1) return
+  
+  const wordsBefore = seg.words.slice(0, wordIdx)
+  const wordsAfter = seg.words.slice(wordIdx)
+  
+  if (wordsBefore.length === 0 || wordsAfter.length === 0) return
+  
+  const seg1End = wordsBefore[wordsBefore.length - 1].end
+  const seg2Start = wordsAfter[0].start
+  
+  const seg1Text = wordsBefore.map((w: any) => w.text).join(' ')
+  const seg2Text = wordsAfter.map((w: any) => w.text).join(' ')
+  
+  const seg1 = {
+    ...seg,
+    end: seg1End,
+    text: seg1Text,
+    words: wordsBefore
+  }
+  
+  const seg2 = {
+    ...seg,
+    start: seg2Start,
+    text: seg2Text,
+    words: wordsAfter,
+    cropX: seg.cropX !== undefined ? seg.cropX : 50
+  }
+  
+  editingSegments.value.splice(segIdx, 1, seg1, seg2)
+  selectedWordIndex.value = null
+  activeSegmentIndex.value = segIdx + 1
+  appendLog(`[EDITOR] Split segment #${segIdx + 1} at word "${wordsAfter[0].text}"`)
+}
+
+watch(playerCurrentTime, (newTime) => {
+  if (!activeClip.value) return
+  const container = document.getElementById('timeline-scroll-container')
+  if (!container) return
+  
+  const relativePlayheadPx = (newTime - activeClip.value.start) * 20
+  const containerWidth = container.clientWidth
+  container.scrollLeft = relativePlayheadPx - containerWidth / 2
+})
 </script>

@@ -5,8 +5,12 @@ import 'dotenv/config';
 export interface ClipCandidate {
     start: string; // "00:00:10"
     end: string;   // "00:00:20"
+    title: string; // Viral, catchy short title (max 5 words)
     reason: string;
-    score: number; // 1-10
+    score: number; // Overall viral score 1-10
+    hookScore: number; // Hook score 1-10
+    flowScore: number; // Flow score 1-10
+    emojiMap: Record<string, string>; // Mapping of important keywords in the clip to emojis
 }
 
 export const analyzeTranscript = async (transcript: string): Promise<ClipCandidate[]> => {
@@ -17,7 +21,7 @@ export const analyzeTranscript = async (transcript: string): Promise<ClipCandida
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-3.5-flash",
         generationConfig: {
             responseMimeType: "application/json"
         }
@@ -44,8 +48,12 @@ export const analyzeTranscript = async (transcript: string): Promise<ClipCandida
     Kembalikan sebuah JSON array of objects dengan struktur berikut:
     - start: waktu mulai klip, format string (HH:MM:SS atau MM:SS)
     - end: waktu selesai klip, format string (HH:MM:SS atau MM:SS)
+    - title: Judul singkat, padat, dan sangat memicu rasa ingin tahu (click-worthy) untuk klip ini (maksimal 5 kata, dalam bahasa Indonesia).
     - reason: penjelasan singkat dalam bahasa Indonesia mengapa bagian ini sangat menarik, apa hook-nya, dan mengapa memiliki potensi viral.
-    - score: angka 1-10 yang menunjukkan potensi viralitas (berikan nilai >= 7 hanya untuk klip yang benar-benar luar biasa).
+    - score: angka 1-10 yang menunjukkan potensi viralitas secara keseluruhan (berikan nilai >= 7 hanya untuk klip yang benar-benar luar biasa).
+    - hookScore: angka 1-10 khusus kekuatan hook pada 3 detik pertama.
+    - flowScore: angka 1-10 khusus kelancaran alur cerita dan retensi audiens.
+    - emojiMap: objek kamus (dictionary) yang memetakan kata-kata kunci emosional penting di dalam teks klip ini ke emoji yang relevan (misalnya: {"kaya": "💰", "gila": "🤯", "sukses": "🚀"}). Buat minimal 3 pemetaan kata kunci ke emoji yang benar-benar ada di transkrip segmen tersebut.
 
     Jika transkrip ini sama sekali tidak memiliki bagian yang menarik atau tidak memenuhi kriteria di atas, kembalikan array kosong: [].
 
