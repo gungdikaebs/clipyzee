@@ -2,6 +2,7 @@ export interface TranscriptSegment {
     start: number;
     end: number;
     text: string;
+    words?: Array<{ start: number, end: number, text: string }>;
 }
 
 export interface ClipCandidate {

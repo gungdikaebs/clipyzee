@@ -43,7 +43,18 @@ export class VideoService {
     };
   }
 
-  async renderClip(dto: { videoId: string; url: string; start: number; end: number }) {
+  async renderClip(dto: {
+    videoId: string;
+    url: string;
+    start: number;
+    end: number;
+    aspectRatio?: string;
+    subtitleStyle?: string;
+    customTranscript?: any[];
+    cropX?: number;
+    extractOnly?: boolean;
+    rawVideoPath?: string;
+  }) {
     // 1. Create Render Job in DB
     const jobRecord = await this.prisma.job.create({
       data: {
@@ -59,6 +70,12 @@ export class VideoService {
       url: dto.url,
       start: dto.start,
       end: dto.end,
+      aspectRatio: dto.aspectRatio || '9:16',
+      subtitleStyle: dto.subtitleStyle || 'DEFAULT',
+      customTranscript: dto.customTranscript || null,
+      cropX: dto.cropX !== undefined ? dto.cropX : 50,
+      extractOnly: !!dto.extractOnly,
+      rawVideoPath: dto.rawVideoPath || null,
     });
 
     return {
@@ -77,5 +94,24 @@ export class VideoService {
     }
 
     return job;
+  }
+
+  async getHistory() {
+    return this.prisma.video.findMany({
+      include: {
+        jobs: {
+          where: {
+            type: 'ANALYZE',
+            status: 'COMPLETED',
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
   }
 }

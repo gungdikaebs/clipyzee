@@ -18,6 +18,11 @@ export class VideoController {
     return this.videoService.renderClip(renderClipDto);
   }
 
+  @Get('history')
+  getHistory() {
+    return this.videoService.getHistory();
+  }
+
   @Get('job/:id')
   getJob(@Param('id') id: string) {
     return this.videoService.getJobStatus(id);

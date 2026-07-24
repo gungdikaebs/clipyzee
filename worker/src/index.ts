@@ -8,7 +8,9 @@ import * as util from 'util';
 import 'dotenv/config';
 import bytes from 'bytes';
 import { selectClips, TranscriptSegment, ClipCandidate } from './selector';
-import { downloadAudioOnly, extractAudio, downloadClip, getVideoDuration } from './video';
+import { downloadAudioOnly, extractAudio, downloadClip, getVideoDuration, renderClipWithSubtitles } from './video';
+import { generateAssSubtitles } from './subtitle';
+import { analyzeTranscript } from './llm';
 
 const execPromise = util.promisify(exec);
 const prisma = new PrismaClient();
@@ -116,10 +118,39 @@ const handleAnalyzeJob = async (job: Job) => {
             fullTranscript = fullTranscript.concat(offsetTranscript);
             console.log(`[Analyze] Chunk Transcription complete. Found ${offsetTranscript.length} segments.`);
 
-            // 3.4 Rule-Based Segment Selection
-            console.log(`[Selector] Running deterministic analyzer for chunk...`);
-            const chunkClips = selectClips(offsetTranscript);
-            console.log(`[Selector] Found ${chunkClips.length} candidates in chunk.`);
+            // 3.4 Gemini LLM Selection
+            console.log(`[Selector] Running Gemini LLM analyzer for chunk...`);
+            const formatTimeForLLM = (totalSeconds: number) => {
+                const h = Math.floor(totalSeconds / 3600);
+                const m = Math.floor((totalSeconds % 3600) / 60);
+                const s = Math.floor(totalSeconds % 60);
+                return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+            };
+
+            const formattedTranscript = offsetTranscript
+                .map(seg => `[${formatTimeForLLM(seg.start)} - ${formatTimeForLLM(seg.end)}] ${seg.text}`)
+                .join('\n');
+
+            const llmCandidates = await analyzeTranscript(formattedTranscript);
+            console.log(`[Selector] Gemini returned ${llmCandidates.length} candidates.`);
+
+            const parseTimeToSeconds = (timeStr: string): number => {
+                const parts = timeStr.trim().split(':').map(Number);
+                if (parts.length === 3) {
+                    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+                } else if (parts.length === 2) {
+                    return parts[0] * 60 + parts[1];
+                } else {
+                    return Number(timeStr) || 0;
+                }
+            };
+
+            const chunkClips = llmCandidates.map(c => ({
+                start: parseTimeToSeconds(c.start),
+                end: parseTimeToSeconds(c.end),
+                reason: c.reason,
+                score: c.score,
+            }));
 
             masterClips = masterClips.concat(chunkClips);
 
@@ -184,8 +215,10 @@ const handleAnalyzeJob = async (job: Job) => {
 // Phase 2: Render Clip Job
 // ---------------------------------------------------------
 const handleRenderJob = async (job: Job) => {
-    const { videoId, jobId, url, start, end } = job.data;
-    console.log(`[Render] Processing job ${job.id} for video ${videoId} [${start}s - ${end}s]`);
+    const { videoId, jobId, url, start, end, aspectRatio, subtitleStyle, cropX, extractOnly, rawVideoPath } = job.data;
+    const aspect = aspectRatio || '9:16';
+    const subStyle = subtitleStyle || 'DEFAULT';
+    console.log(`[Render] Processing job ${job.id} for video ${videoId} [${start}s - ${end}s] (Aspect: ${aspect}, Style: ${subStyle}, ExtractOnly: ${extractOnly}, RawVideoPath: ${rawVideoPath})`);
 
     const outputDir = path.join(__dirname, '../output/renders');
     await fs.mkdir(outputDir, { recursive: true });
@@ -193,13 +226,92 @@ const handleRenderJob = async (job: Job) => {
     let finalFilePath: string | null = null;
 
     try {
-        await prisma.job.update({
-            where: { id: jobId },
-            data: { status: 'PROCESSING' },
-        });
+        // A. Extract Only Flow (Fast Raw Clip download)
+        if (extractOnly) {
+            console.log(`[Render] [Bypass] Extracting raw clip only from YouTube...`);
+            finalFilePath = await downloadClip(url, outputDir, jobId, start, end);
+            
+            await prisma.job.update({
+                where: { id: jobId },
+                data: {
+                    status: 'COMPLETED',
+                    result: {
+                        filePath: finalFilePath
+                    } as any,
+                },
+            });
+            console.log(`[Render] Raw clip extracted to: ${finalFilePath}`);
+            return;
+        }
 
-        // Delegate to yt-dlp native section download
-        finalFilePath = await downloadClip(url, outputDir, jobId, start, end);
+        // B. Standard Subtitle Render Flow
+        let transcript: TranscriptSegment[] = [];
+        const { customTranscript } = job.data;
+
+        if (customTranscript && customTranscript.length > 0) {
+            console.log(`[Render] Using custom edited transcript override with ${customTranscript.length} segments.`);
+            transcript = customTranscript;
+        } else {
+            // The render-clip actually receives the same videoId, but we don't pass the heavy transcript
+            // in the BullMQ payload, so we must load it from the database where it was saved.
+            const parentJob = await prisma.job.findFirst({
+                where: { videoId: videoId, type: 'ANALYZE', status: 'COMPLETED' },
+                orderBy: { createdAt: 'desc' }
+            });
+
+            if (parentJob && parentJob.result && (parentJob.result as any).transcript) {
+                transcript = (parentJob.result as any).transcript;
+            } else {
+                // Fallback to reading the local json dump if DB is wiped but files persist
+                const transcriptPath = path.join(__dirname, `../output/transcript-${videoId}.json`);
+                if (await checkFileExists(transcriptPath)) {
+                    const rawData = await fs.readFile(transcriptPath, 'utf-8');
+                    transcript = JSON.parse(rawData);
+                } else {
+                    console.warn(`[Render] WARNING: Could not find word-level transcript for ${videoId}. Subtitles will not be generated.`);
+                }
+            }
+        }
+
+        // C. Reuse rawVideoPath if present on local disk, otherwise download from YouTube
+        let downloadedFilePath = "";
+        if (rawVideoPath && await checkFileExists(rawVideoPath)) {
+            downloadedFilePath = rawVideoPath;
+            console.log(`[Render] Reusing pre-extracted raw video clip: ${downloadedFilePath}`);
+        } else {
+            console.log(`[Render] Downloading video clip from YouTube...`);
+            downloadedFilePath = await downloadClip(url, outputDir, jobId, start, end);
+        }
+
+        if (transcript.length > 0) {
+            // 3. Generate .ass subtitle file for the specific timeframe
+            const assFileName = `subs-${jobId}.ass`;
+            const assFilePath = path.join(outputDir, assFileName);
+
+            console.log(`[Render] Generating stylized subtitles for ${start}s - ${end}s (Style: ${subStyle}, Aspect: ${aspect})`);
+            await generateAssSubtitles(transcript, assFilePath, start, end, subStyle, aspect);
+
+            // 4. Render final video with burned-in subtitles
+            const finalRenderFileName = `render-${jobId}.mp4`;
+            const finalRenderFilePath = path.join(outputDir, finalRenderFileName);
+
+            console.log(`[Render] Burning subtitles and rendering as ${aspect}...`);
+            finalFilePath = await renderClipWithSubtitles(downloadedFilePath, assFilePath, finalRenderFilePath, aspect, Number(start), transcript);
+
+            // Clean up intermediates
+            try {
+                if (!rawVideoPath) {
+                    await fs.rm(downloadedFilePath, { force: true });
+                }
+                await fs.rm(assFilePath, { force: true });
+            } catch (e) {
+                console.error(`[Cleanup] Render job ${jobId} failed to clean intermediates.`, e);
+            }
+
+        } else {
+            console.log(`[Render] No transcript available, outputting default downloaded video.`);
+            finalFilePath = downloadedFilePath;
+        }
 
         await prisma.job.update({
             where: { id: jobId },

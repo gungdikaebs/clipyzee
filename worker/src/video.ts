@@ -16,7 +16,7 @@ async function checkFileExists(file: string) {
 export const downloadAudioOnly = async (url: string, outputDir: string, videoId: string): Promise<string> => {
     const outputPath = path.join(outputDir, `audio-source-${videoId}.m4a`);
 
-    const command = `yt-dlp -f "bestaudio[ext=m4a]/bestaudio" -o "${outputPath}" "${url}"`;
+    const command = `yt-dlp --extractor-args "youtube:player_client=default,-android_sdkless" -f "bestaudio[ext=m4a]/bestaudio/best" -o "${outputPath}" "${url}"`;
 
     console.log(`[Video] [1/5] Downloading audio-only source: ${outputPath}`);
     await execPromise(command);
@@ -49,7 +49,7 @@ export const downloadClip = async (url: string, outputDir: string, jobId: string
     const outputPath = path.join(outputDir, `${filePrefix}.%(ext)s`);
 
     // Specific yt-dlp scheme as defined by user constraints
-    const command = `yt-dlp -f "bv*[height<=1080][fps>=60]+ba/bv*[height<=1080]+ba/bv*+ba/b" --download-sections "*${startFormatted}-${endFormatted}" --merge-output-format mp4 -o "${outputPath}" "${url}"`;
+    const command = `yt-dlp --extractor-args "youtube:player_client=default,-android_sdkless" -f "bv*[height<=1080][fps>=60]+ba/bv*[height<=1080]+ba/bv*+ba/b" --download-sections "*${startFormatted}-${endFormatted}" --merge-output-format mp4 -o "${outputPath}" "${url}"`;
 
     console.log(`[Render] Initiating targeted download for ${startFormatted} to ${endFormatted} with prefix ${filePrefix}`);
     await execPromise(command);
@@ -114,4 +114,65 @@ export const cutClip = async (sourcePath: string, start: number, end: number, ou
     if (!(await checkFileExists(outputPath))) {
         throw new Error(`Clip generation failed: ${outputPath}`);
     }
+};
+
+/**
+ * Renders a final vertical clip with burned-in ASS subtitles.
+ * It applies a 9:16 crop to the center of the video and burns the subtitles using the 'ass' video filter.
+ */
+export const renderClipWithSubtitles = async (
+    sourcePath: string,
+    assPath: string,
+    outputPath: string,
+    aspectRatio: string = '9:16',
+    clipStart: number = 0,
+    segments: any[] = []
+): Promise<string> => {
+    // Need to ensure the ass filter path is absolute and properly escaped for FFmpeg
+    const escapedAssPath = assPath.replace(/\\/g, '/').replace(/:/g, '\\:');
+
+    // Build conditional FFmpeg expression for cropX based on segment timestamps
+    let cropXExpr = "50"; // default fallback to center
+    if (segments && segments.length > 0) {
+        // Sort segments chronologically
+        const sorted = [...segments].sort((a, b) => a.start - b.start);
+        for (let i = sorted.length - 1; i >= 0; i--) {
+            const seg = sorted[i];
+            const relStart = Math.max(0, seg.start - clipStart).toFixed(2);
+            const relEnd = (seg.end - clipStart).toFixed(2);
+            const segCropX = seg.cropX !== undefined ? seg.cropX : 50;
+            // Build nested ternary: if time is within relative bounds of segment, use its cropX; else fall back
+            cropXExpr = `if(and(gte(t,${relStart}),lt(t,${relEnd})),${segCropX},${cropXExpr})`;
+        }
+    }
+
+    // Video Filters (vf) based on aspect ratio:
+    let vfQueue = "";
+    if (aspectRatio === '1:1') {
+        // Square crop: center crop to square with dynamic panning expression, then scale to 1080x1080 to match subtitle canvas
+        vfQueue = `crop=ih:ih:(iw-ow)*(${cropXExpr}/100),scale=1080:1080:flags=lanczos,ass='${escapedAssPath}'`;
+    } else if (aspectRatio === '4:3') {
+        // Standard TV crop: crop to 4:3 with dynamic panning expression, then scale to 1440x1080 to match subtitle canvas
+        vfQueue = `crop=ih*(4/3):ih:(iw-ow)*(${cropXExpr}/100),scale=1440:1080:flags=lanczos,ass='${escapedAssPath}'`;
+    } else if (aspectRatio === '16:9') {
+        // Landscape: no crop, scale to 1920x1080 to match subtitle canvas
+        vfQueue = `scale=1920:1080:flags=lanczos,ass='${escapedAssPath}'`;
+    } else {
+        // Default 9:16 Vertical crop: crop center with dynamic panning expression, scale to 1080x1920 to match subtitle canvas
+        vfQueue = `crop=ih*(9/16):ih:(iw-ow)*(${cropXExpr}/100),scale=1080:1920:flags=lanczos,ass='${escapedAssPath}'`;
+    }
+
+    // -c:v libx264 - fast encode, high quality
+    // -preset fast - acceptable speed vs compression ratio
+    // -c:a copy - copy audio without re-encoding
+    const command = `ffmpeg -y -i "${sourcePath}" -vf "${vfQueue}" -c:v libx264 -preset fast -crf 23 -c:a copy "${outputPath}"`;
+
+    console.log(`[Video] Rendering clip (Aspect: ${aspectRatio}) with subtitles: ${outputPath}`);
+    await execPromise(command);
+
+    if (!(await checkFileExists(outputPath))) {
+        throw new Error(`Clip rendering failed: ${outputPath}`);
+    }
+
+    return outputPath;
 };

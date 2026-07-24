@@ -19,16 +19,26 @@ def transcribe(audio_path, language="id", model_size="base"):
         # Load Whisper model dynamically
         model = whisper.load_model(model_size)
         
-        # Transcribe with forced language
-        result = model.transcribe(audio_path, language=language)
+        # Transcribe with forced language and word timestamps
+        result = model.transcribe(audio_path, language=language, word_timestamps=True)
         
-        # Format output to match desired structure: [{start, end, text}]
+        # Format output to match desired structure: [{start, end, text, words: [...]}]
         formatted_segments = []
         for segment in result["segments"]:
+            words_data = []
+            if "words" in segment:
+                for word_info in segment["words"]:
+                    words_data.append({
+                        "start": word_info.get("start", 0),
+                        "end": word_info.get("end", 0),
+                        "text": word_info.get("word", "").strip()
+                    })
+                    
             formatted_segments.append({
                 "start": segment["start"],
                 "end": segment["end"],
-                "text": segment["text"].strip()
+                "text": segment["text"].strip(),
+                "words": words_data
             })
             
         print(json.dumps(formatted_segments))
