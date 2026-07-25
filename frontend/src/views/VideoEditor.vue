@@ -1,60 +1,55 @@
 <template>
-  <div v-if="isLoaded && activeClip" class="w-100">
+  <div v-if="isLoaded && activeClip" class="w-full p-4">
     <!-- Editor Top Control Bar -->
-    <div class="d-flex align-center justify-space-between mb-6">
-      <div class="d-flex align-center">
-        <v-btn
-          variant="outlined"
-          color="grey"
-          prepend-icon="mdi-arrow-left"
-          class="text-none font-weight-bold mr-4 rounded-lg"
-          @click="onClose"
-        >
+    <div class="flex items-center justify-between mb-5">
+      <div class="flex items-center gap-3">
+        <button class="btn-secondary text-xs flex items-center gap-1.5" @click="onClose">
+          <ArrowLeft :size="14" />
           Back to Candidates
-        </v-btn>
-        <h2 class="text-h5 font-weight-bold text-white mb-0" style="font-family: 'Outfit', sans-serif;">Clipyzee Editor Suite</h2>
-        <v-chip size="small" color="primary" variant="tonal" class="ml-4 font-weight-bold">
-          Editing Clip #{{ currentEditingClipIndex !== null ? currentEditingClipIndex + 1 : 1 }}
-        </v-chip>
+        </button>
+        <h2 class="font-heading text-lg font-bold text-text-primary">Clipyzee Editor Suite</h2>
+        <span class="chip chip-primary">Editing Clip #{{ currentEditingClipIndex !== null ? currentEditingClipIndex + 1 : 1 }}</span>
       </div>
-      <div>
-        <v-btn color="success" variant="flat" class="px-8 font-weight-bold rounded-lg gradient-btn" @click="onRender">
-          <v-icon icon="mdi-movie-open" class="mr-2"></v-icon> Render HD Clip
-        </v-btn>
-      </div>
+      <button class="btn-primary text-sm flex items-center gap-2" @click="onRender">
+        <Film :size="16" />
+        Render HD Clip
+      </button>
     </div>
 
     <!-- Main Split Panels -->
-    <v-row>
-      <!-- Left Panel: Large Video Frame and Overlay -->
-      <v-col cols="12" md="7">
-        <v-card class="bg-black bg-opacity-40 border border-white border-opacity-5 rounded-xl pa-4 d-flex flex-column align-center justify-center relative-content" style="height: 560px;">
-          <div class="text-caption text-grey-lighten-2 mb-3 w-100 d-flex justify-space-between align-center" style="position: absolute; top: 16px; left: 16px; right: 16px; z-index: 5;">
-            <span class="d-flex align-center font-weight-bold text-uppercase"><v-icon icon="mdi-eye" class="mr-1 text-primary" size="small"></v-icon> Crop Preview</span>
-            <span class="font-weight-black text-primary">{{ editorState.aspectRatio }} Mode</span>
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+      <!-- Left Panel: Video Preview -->
+      <div class="md:col-span-7">
+        <div class="glass-card p-4 flex flex-col items-center justify-center relative" style="height: 560px;">
+          <!-- Preview Label -->
+          <div class="absolute top-4 left-4 right-4 z-10 flex justify-between items-center text-xs text-text-secondary">
+            <span class="flex items-center gap-1 font-bold uppercase">
+              <Eye :size="12" class="text-accent" /> Crop Preview
+            </span>
+            <span class="font-black text-accent">{{ editorState.aspectRatio }} Mode</span>
           </div>
 
-          <div :style="previewFrameStyle" class="d-flex align-center justify-center bg-black border border-white border-opacity-10 relative-content" style="position: relative; overflow: hidden;">
-            <!-- HTML5 Native Local Video Player -->
+          <!-- Video frame -->
+          <div :style="previewFrameStyle" class="flex items-center justify-center bg-black border border-border relative overflow-hidden">
             <video
               v-if="activeClip && activeClip.rawVideoPath"
               id="editor-video-player"
               :src="`${API_BASE}/video/download?path=${encodeURIComponent(activeClip.rawVideoPath || '')}`"
               controls
-              class="absolute-center"
               :style="playerWrapperStyle"
               @timeupdate="onTimeUpdate"
               @mousedown="onDragStart"
+              class="absolute"
               style="cursor: grab; max-width: none !important;"
             ></video>
-            <div v-else class="w-100 h-100 d-flex align-center justify-center text-grey">
+            <div v-else class="w-full h-full flex items-center justify-center text-text-muted text-sm">
               No local preview clip available
             </div>
-            
+
             <!-- Live Subtitle Overlay -->
-            <div class="live-subtitle-overlay d-flex justify-center align-center w-100" style="position: absolute; bottom: 15%; left: 0; right: 0; pointer-events: none; z-index: 10; padding: 0 16px;">
-              <div class="text-center w-100">
-                <div class="d-flex flex-wrap justify-center" style="gap: 4px;">
+            <div class="absolute bottom-[15%] left-0 right-0 z-10 pointer-events-none px-4">
+              <div class="text-center w-full">
+                <div class="flex flex-wrap justify-center gap-1">
                   <span
                     v-for="(w, wIdx) in activeSubtitleWords"
                     :key="wIdx"
@@ -66,156 +61,128 @@
               </div>
             </div>
           </div>
-        </v-card>
-      </v-col>
+        </div>
+      </div>
 
-      <!-- Right Panel: Subtitles Inspector and styling -->
-      <v-col cols="12" md="5" class="d-flex flex-column overflow-hidden" style="height: 560px;">
-        <v-card class="glass-card border border-white border-opacity-5 rounded-xl pa-4 d-flex flex-column h-100">
-          <!-- Styles selection -->
+      <!-- Right Panel: Inspector -->
+      <div class="md:col-span-5 flex flex-col overflow-hidden" style="height: 560px;">
+        <div class="glass-card p-4 flex flex-col h-full overflow-hidden">
+          <!-- Subtitle Style Presets -->
           <div class="mb-4">
-            <div class="text-subtitle-2 font-weight-bold mb-2 text-grey-lighten-1 d-flex align-center">
-              <v-icon icon="mdi-palette" class="mr-2 text-warning" size="small"></v-icon> Subtitle Style Preset
+            <div class="text-xs font-bold text-text-secondary mb-2 flex items-center gap-1.5">
+              <Palette :size="13" class="text-amber-400" /> Subtitle Style Preset
             </div>
-            <v-row dense>
-              <v-col cols="6" v-for="style in subtitleStyles" :key="style.value" class="mb-1">
-                <v-card
-                  :class="['pa-3', 'style-preset-card', editorState.subtitleStyle === style.value ? 'border-primary border border-opacity-100 bg-primary bg-opacity-10' : 'bg-white bg-opacity-5']"
-                  @click="editorState.subtitleStyle = style.value"
-                  style="min-height: 55px;"
-                >
-                  <div class="text-caption font-weight-bold text-grey mb-1">{{ style.text.split(' ')[0] }}</div>
-                  <span :class="['style-preview-text', style.value.toLowerCase()]">{{ style.text.substring(0, 12) }}</span>
-                </v-card>
-              </v-col>
-            </v-row>
+            <div class="grid grid-cols-2 gap-1.5">
+              <button
+                v-for="style in subtitleStyles"
+                :key="style.value"
+                :class="[
+                  'p-2.5 rounded-lg text-left transition-all cursor-pointer',
+                  editorState.subtitleStyle === style.value
+                    ? 'border border-accent bg-accent/10'
+                    : 'border border-border bg-white/[0.03] hover:bg-white/[0.05]'
+                ]"
+                @click="editorState.subtitleStyle = style.value"
+              >
+                <div class="text-[10px] font-bold text-text-muted mb-1">{{ style.text.split(' ')[0] }}</div>
+                <span :class="['style-preview-text', style.value.toLowerCase()]">{{ style.text.substring(0, 12) }}</span>
+              </button>
+            </div>
           </div>
 
-          <!-- Aspect selector -->
+          <!-- Aspect Ratio -->
           <div class="mb-4">
-            <div class="text-subtitle-2 font-weight-bold mb-2 text-grey-lighten-1 d-flex align-center">
-              <v-icon icon="mdi-aspect-ratio" class="mr-2 text-success" size="small"></v-icon> Dimensions Layout
+            <div class="text-xs font-bold text-text-secondary mb-2 flex items-center gap-1.5">
+              <RectangleHorizontal :size="13" class="text-emerald-400" /> Dimensions Layout
             </div>
-            <v-select
-              v-model="editorState.aspectRatio"
-              :items="aspectRatios"
-              item-title="text"
-              item-value="value"
-              variant="outlined"
-              density="compact"
-              hide-details
-              bg-color="rgba(255,255,255,0.02)"
-              class="rounded-lg"
-            ></v-select>
+            <select v-model="editorState.aspectRatio" class="input-dark text-sm py-2">
+              <option v-for="ar in aspectRatios" :key="ar.value" :value="ar.value">{{ ar.text }}</option>
+            </select>
           </div>
 
-          <!-- Pan coordinates cropX slider -->
+          <!-- CropX Slider -->
           <div v-if="editingSegments.length > 0 && editingSegments[activeSegmentIndex] && editorState.aspectRatio !== '16:9'" class="mb-4">
-            <div class="text-subtitle-2 font-weight-bold mb-1 text-grey-lighten-1 d-flex align-center">
-              <v-icon icon="mdi-crop" class="mr-2 text-primary" size="small"></v-icon> Drag / Adjust Crop Coordinates
+            <div class="text-xs font-bold text-text-secondary mb-1 flex items-center gap-1.5">
+              <Crop :size="13" class="text-accent" /> Crop Position
             </div>
-            <v-slider
-              v-model="editingSegments[activeSegmentIndex].cropX"
-              @update:model-value="editorState.cropX = $event"
-              min="0"
-              max="100"
-              step="1"
-              hide-details
-              color="primary"
-              track-color="rgba(255,255,255,0.1)"
-              class="align-center"
-            >
-              <template v-slot:append>
-                <span class="text-caption font-weight-bold text-grey-lighten-1" style="min-width: 45px; display: inline-block; text-align: right;">
-                  {{ editingSegments[activeSegmentIndex].cropX }}%
-                </span>
-              </template>
-            </v-slider>
+            <div class="flex items-center gap-3">
+              <input
+                type="range"
+                v-model.number="editingSegments[activeSegmentIndex].cropX"
+                @input="editorState.cropX = editingSegments[activeSegmentIndex].cropX"
+                min="0" max="100" step="1"
+                class="flex-1 accent-accent h-1.5"
+              />
+              <span class="text-xs font-bold text-text-secondary w-10 text-right">{{ editingSegments[activeSegmentIndex].cropX }}%</span>
+            </div>
           </div>
 
-          <v-divider class="mb-4 border-opacity-10"></v-divider>
+          <div class="border-t border-border mb-4"></div>
 
-          <!-- Word level colorist and list -->
-          <div class="d-flex flex-column flex-grow-1 overflow-hidden">
-            <div class="text-subtitle-2 font-weight-bold mb-2 text-grey-lighten-1 d-flex align-center">
-              <v-icon icon="mdi-text-box-edit" class="mr-2 text-info" size="small"></v-icon> Subtitle word overrides
+          <!-- Word Level Stylist -->
+          <div class="flex flex-col flex-1 overflow-hidden">
+            <div class="text-xs font-bold text-text-secondary mb-2 flex items-center gap-1.5">
+              <Type :size="13" class="text-blue-400" /> Subtitle word overrides
             </div>
 
-            <div v-if="editingSegments.length > 0 && editingSegments[activeSegmentIndex]" class="bg-black bg-opacity-30 rounded-lg pa-3 mb-3 border border-white border-opacity-5">
-              <div class="text-caption font-weight-bold text-grey mb-2 d-flex align-center">
-                <v-icon icon="mdi-palette-swatch" class="mr-1 text-primary" size="small"></v-icon> Word Stylist (Select a word to color)
+            <div v-if="editingSegments.length > 0 && editingSegments[activeSegmentIndex]" class="bg-black/30 rounded-lg p-3 mb-3 border border-border">
+              <div class="text-[10px] font-bold text-text-muted mb-2 flex items-center gap-1">
+                <Palette :size="10" class="text-accent" /> Word Stylist (Select a word to color)
               </div>
-              <div class="d-flex flex-wrap gap-1 mb-2">
-                <v-chip
+              <div class="flex flex-wrap gap-1 mb-2">
+                <button
                   v-for="(w, wIdx) in editingSegments[activeSegmentIndex].words"
                   :key="wIdx"
-                  :color="selectedWordIndex === wIdx ? 'primary' : 'default'"
-                  :variant="selectedWordIndex === wIdx ? 'flat' : 'tonal'"
-                  size="small"
-                  class="text-caption font-weight-bold px-2 py-0.5"
-                  @click="selectWord(Number(wIdx))"
+                  :class="[
+                    'text-xs font-bold px-2 py-0.5 rounded transition-all',
+                    selectedWordIndex === wIdx
+                      ? 'bg-accent/20 ring-1 ring-accent'
+                      : 'bg-white/5 hover:bg-white/10'
+                  ]"
                   :style="{
                     color: w.textColor || '#fff',
                     textShadow: w.outlineColor ? `1px 1px 0px ${w.outlineColor}` : 'none'
                   }"
+                  @click="selectWord(Number(wIdx))"
                 >
                   {{ w.text }}
-                </v-chip>
+                </button>
               </div>
 
-              <!-- Color custom picks -->
-              <div v-if="selectedWordIndex !== null && editingSegments[activeSegmentIndex].words[selectedWordIndex]" class="mt-2 pa-2 bg-black bg-opacity-40 rounded">
-                <v-row dense align="center">
-                  <v-col cols="6">
-                    <div class="text-caption text-grey mb-1">Text Color</div>
-                    <v-select
+              <!-- Color pickers -->
+              <div v-if="selectedWordIndex !== null && editingSegments[activeSegmentIndex].words[selectedWordIndex]" class="mt-2 p-2 bg-black/40 rounded space-y-2">
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <div class="text-[10px] text-text-muted mb-1">Text Color</div>
+                    <select
                       v-model="editingSegments[activeSegmentIndex].words[selectedWordIndex].textColor"
-                      :items="textColors"
-                      item-title="name"
-                      item-value="value"
-                      density="compact"
-                      variant="outlined"
-                      hide-details
-                      bg-color="rgba(255,255,255,0.02)"
-                    ></v-select>
-                  </v-col>
-                  <v-col cols="6">
-                    <div class="text-caption text-grey mb-1">Outline Color</div>
-                    <v-select
-                      v-model="editingSegments[activeSegmentIndex].words[selectedWordIndex].outlineColor"
-                      :items="outlineColors"
-                      item-title="name"
-                      item-value="value"
-                      density="compact"
-                      variant="outlined"
-                      hide-details
-                      bg-color="rgba(255,255,255,0.02)"
-                    ></v-select>
-                  </v-col>
-                </v-row>
-                
-                <!-- Split button action -->
-                <v-row dense class="mt-2">
-                  <v-col cols="12">
-                    <v-btn
-                      size="small"
-                      color="error"
-                      variant="tonal"
-                      block
-                      prepend-icon="mdi-scissors-cutting"
-                      @click="splitSegmentAtWord(activeSegmentIndex, selectedWordIndex)"
-                      class="text-none font-weight-bold rounded-lg"
+                      class="input-dark text-xs py-1.5"
                     >
-                      Split Segment Here
-                    </v-btn>
-                  </v-col>
-                </v-row>
+                      <option v-for="c in textColors" :key="c.value" :value="c.value">{{ c.name }}</option>
+                    </select>
+                  </div>
+                  <div>
+                    <div class="text-[10px] text-text-muted mb-1">Outline Color</div>
+                    <select
+                      v-model="editingSegments[activeSegmentIndex].words[selectedWordIndex].outlineColor"
+                      class="input-dark text-xs py-1.5"
+                    >
+                      <option v-for="c in outlineColors" :key="c.value" :value="c.value">{{ c.name }}</option>
+                    </select>
+                  </div>
+                </div>
+                <button
+                  class="w-full text-xs py-1.5 rounded-lg bg-red-500/15 text-red-400 font-bold hover:bg-red-500/25 transition-colors flex items-center justify-center gap-1"
+                  @click="splitSegmentAtWord(activeSegmentIndex, selectedWordIndex)"
+                >
+                  <Scissors :size="12" /> Split Segment Here
+                </button>
               </div>
 
-              <!-- Live Styled Text Preview inside the sidebar card inspector -->
-              <div class="mt-3 text-center pa-2 rounded bg-black bg-opacity-60 border border-white border-opacity-5" style="min-height: 48px;">
-                <div class="text-caption text-grey text-left font-weight-bold" style="font-size: 10px !important;">Live Styled Preview:</div>
-                <div class="text-subtitle-2 font-weight-black text-uppercase d-flex flex-wrap justify-center mt-1" style="gap: 4px; letter-spacing: 1px;">
+              <!-- Live Preview -->
+              <div class="mt-3 text-center p-2 rounded bg-black/60 border border-border" style="min-height: 42px;">
+                <div class="text-[9px] text-text-muted text-left font-bold">Live Styled Preview:</div>
+                <div class="text-xs font-black uppercase flex flex-wrap justify-center mt-1 gap-1 tracking-wide">
                   <span
                     v-for="(w, wIdx) in getSegmentWords(editingSegments[activeSegmentIndex])"
                     :key="wIdx"
@@ -230,52 +197,53 @@
               </div>
             </div>
 
-            <div class="flex-grow-1 overflow-y-auto pr-1 pb-1" style="max-height: 160px;">
+            <!-- Segment list -->
+            <div class="flex-1 overflow-y-auto pr-1 pb-1" style="max-height: 160px;">
               <div
                 v-for="(seg, idx) in editingSegments"
                 :key="idx"
-                :class="['mb-2', 'pa-2', 'rounded-lg', 'border', 'transition-all', computedActiveSegmentIndex === idx ? 'border-primary bg-primary bg-opacity-10 active-card-pulse' : 'border-white border-opacity-5 bg-white bg-opacity-1']"
+                :class="[
+                  'mb-2 p-2 rounded-lg border transition-all cursor-pointer',
+                  computedActiveSegmentIndex === idx
+                    ? 'border-accent bg-accent/10'
+                    : 'border-border bg-white/[0.01] hover:bg-white/[0.03]'
+                ]"
                 @click="selectSegment(idx)"
-                style="cursor: pointer;"
               >
-                <div class="d-flex justify-space-between align-center mb-1">
-                  <span class="text-caption text-grey">{{ formatTime(seg.start) }} - {{ formatTime(seg.end) }}</span>
-                  <v-icon v-if="activeSegmentIndex === idx" icon="mdi-pencil" size="x-small" color="primary"></v-icon>
+                <div class="flex justify-between items-center mb-1">
+                  <span class="text-[10px] text-text-muted">{{ formatTime(seg.start) }} - {{ formatTime(seg.end) }}</span>
+                  <PenLine v-if="activeSegmentIndex === idx" :size="10" class="text-accent" />
                 </div>
-                <v-text-field
+                <input
                   v-model="seg.text"
-                  variant="outlined"
-                  density="compact"
-                  hide-details
-                  bg-color="rgba(0,0,0,0.2)"
-                  class="text-body-2"
+                  class="input-dark text-xs py-1.5 !bg-black/20"
                   @focus="activeSegmentIndex = idx; selectedWordIndex = null"
                   @input="syncWordsOnTextChange(seg)"
-                ></v-text-field>
+                />
               </div>
             </div>
           </div>
-        </v-card>
-      </v-col>
-    </v-row>
-
-    <!-- Timeline block scrollbar (CapCut style) -->
-    <div class="mt-4 px-6 py-3 bg-black bg-opacity-40 border border-white border-opacity-5 rounded-xl">
-      <div class="text-caption font-weight-bold mb-2 text-grey d-flex justify-space-between align-center">
-        <span class="d-flex align-center">
-          <v-icon icon="mdi-ruler-square" class="mr-2" size="small"></v-icon> Video Timeline Track
-        </span>
-        <span class="text-caption text-grey">Click on empty track areas to seek / scrub video playhead</span>
+        </div>
       </div>
-      
-      <div 
-        id="timeline-scroll-container" 
-        class="overflow-x-auto py-3 relative-content" 
-        style="position: relative; min-height: 80px; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);"
+    </div>
+
+    <!-- Timeline Track -->
+    <div class="mt-4 px-4 py-3 bg-black/40 border border-border rounded-xl">
+      <div class="text-xs font-bold text-text-muted mb-2 flex justify-between items-center">
+        <span class="flex items-center gap-1.5">
+          <Ruler :size="13" /> Video Timeline Track
+        </span>
+        <span class="text-[10px] text-text-muted">Click on track to seek / scrub playhead</span>
+      </div>
+
+      <div
+        id="timeline-scroll-container"
+        class="overflow-x-auto py-3 relative"
+        style="min-height: 80px; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);"
       >
-        <div 
+        <div
           id="timeline-scrub-track"
-          class="position-relative" 
+          class="relative"
           :style="{
             width: `${(activeClip.end - activeClip.start) * 20}px`,
             height: '60px'
@@ -283,9 +251,9 @@
           @click="onTimelineTrackClick"
           style="cursor: pointer;"
         >
-          <!-- Playhead indicator line -->
-          <div 
-            class="position-absolute bg-primary" 
+          <!-- Playhead -->
+          <div
+            class="absolute bg-accent"
             :style="{
               left: `${(playerCurrentTime - activeClip.start) * 20}px`,
               width: '2px',
@@ -296,14 +264,19 @@
               boxShadow: '0 0 8px #FF6B4A'
             }"
           >
-            <div style="width: 8px; height: 8px; background: #FF6B4A; border-radius: 50%; margin-left: -3px; margin-top: -3px;"></div>
+            <div class="w-2 h-2 bg-accent rounded-full -ml-[3px] -mt-[3px]"></div>
           </div>
 
-          <!-- Absolute positioned segment blocks -->
+          <!-- Segment blocks -->
           <div
             v-for="(seg, idx) in editingSegments"
             :key="idx"
-            :class="['timeline-block', 'position-absolute', 'pa-2', 'rounded', 'border', 'transition-all', 'overflow-hidden', activeSegmentIndex === idx ? 'active-block border-primary bg-primary bg-opacity-20' : 'border-white border-opacity-5 bg-white bg-opacity-5']"
+            :class="[
+              'timeline-block absolute p-2 rounded border transition-all overflow-hidden',
+              activeSegmentIndex === idx
+                ? 'active-block border-accent bg-accent/20'
+                : 'border-border bg-white/5'
+            ]"
             :style="{
               left: `${(seg.start - activeClip.start) * 20}px`,
               width: `${(seg.end - seg.start) * 20}px`,
@@ -312,10 +285,10 @@
             }"
             @click.stop="selectSegment(idx)"
           >
-            <div class="text-caption text-grey text-truncate font-weight-bold" style="font-size: 9px !important; line-height: 1;">
+            <div class="text-[9px] text-text-muted font-bold leading-none truncate">
               {{ formatTime(seg.start) }} - {{ formatTime(seg.end) }}
             </div>
-            <div class="text-caption text-white text-truncate font-weight-medium mt-0.5" style="font-size: 11px !important; line-height: 1.2;">
+            <div class="text-[11px] text-text-primary font-medium mt-0.5 leading-tight truncate">
               {{ seg.text }}
             </div>
           </div>
@@ -323,9 +296,11 @@
       </div>
     </div>
   </div>
-  <div v-else class="w-100 text-center py-12">
-    <v-progress-circular indeterminate color="primary" size="64"></v-progress-circular>
-    <div class="text-caption text-grey mt-4">Loading editor components...</div>
+
+  <!-- Loading State -->
+  <div v-else class="w-full text-center py-16">
+    <div class="spinner mx-auto mb-4"></div>
+    <p class="text-xs text-text-muted">Loading editor components...</p>
   </div>
 </template>
 
@@ -333,6 +308,10 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useWorkspace } from '../composables/useWorkspace'
+import {
+  ArrowLeft, Film, Eye, Palette, RectangleHorizontal, Crop, Type, Scissors,
+  PenLine, Ruler
+} from 'lucide-vue-next'
 
 const props = defineProps<{
   videoId: string;
@@ -415,7 +394,6 @@ onMounted(async () => {
     return seg
   })
 
-  // Keyboard shortcut listener
   window.addEventListener('keydown', handleSpacebar)
   isLoaded.value = true
 })
@@ -899,7 +877,6 @@ const onTimelineTrackClick = (e: MouseEvent) => {
   const video = document.getElementById('editor-video-player') as HTMLVideoElement | null
   if (video) {
     const targetCurrentTime = Math.max(0, targetAbsoluteTime - clipStart)
-    // Clamp currentTime to the actual video duration to prevent out of bounds resets
     video.currentTime = Math.min(video.duration || (Number(activeClip.value.end) - clipStart), targetCurrentTime)
     playerCurrentTime.value = clipStart + video.currentTime
   }

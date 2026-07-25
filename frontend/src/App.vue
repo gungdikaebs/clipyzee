@@ -1,156 +1,134 @@
 <template>
-  <v-app>
+  <div class="min-h-screen bg-bg text-text-primary">
     <div class="animated-bg"></div>
 
-    <!-- Sidebar Navigation Drawer -->
-    <v-navigation-drawer
+    <!-- Sidebar -->
+    <aside
       v-if="!isEditorRoute"
-      permanent
-      width="260"
-      color="#0F0F12"
-      class="border-r border-white border-opacity-5"
+      class="fixed top-0 left-0 h-screen w-60 bg-surface border-r border-border z-30 flex flex-col"
     >
-      <!-- Brand Logo -->
-      <div class="px-6 py-6 d-flex align-center">
-        <v-avatar color="primary" variant="flat" size="32" class="mr-3 rounded-lg gradient-btn">
-          <v-icon icon="mdi-video-vintage" color="white" size="18"></v-icon>
-        </v-avatar>
-        <span class="gradient-text text-h6 font-weight-black tracking-wide" style="font-family: 'Outfit', sans-serif;">Clipyzee AI</span>
+      <!-- Brand -->
+      <div class="px-5 py-5 flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg btn-primary flex items-center justify-center flex-shrink-0">
+          <Film :size="16" class="text-white" />
+        </div>
+        <span class="font-heading text-lg font-black gradient-text tracking-wide">Clipyzee AI</span>
       </div>
 
-      <!-- Menu List -->
-      <div class="px-3">
-        <!-- Group 1: Tools -->
-        <div class="text-caption font-weight-bold text-grey-darken-1 px-3 mb-2 mt-4 text-uppercase tracking-wider">Tools</div>
-        <v-list density="compact" nav class="bg-transparent pa-0">
-          <v-list-item
-            v-for="item in createMenu"
-            :key="item.value"
-            :active="item.value === 'explore' ? route.path === '/explore' : route.path.startsWith('/studio')"
-            :value="item.value"
-            @click="navigateSidebar(item.value)"
-            class="rounded-lg mb-1"
-            selected-class="active-menu-item"
-          >
-            <template v-slot:prepend>
-              <v-icon :icon="item.icon" size="20" class="mr-1"></v-icon>
-            </template>
-            <v-list-item-title class="font-weight-medium text-body-2">{{ item.title }}</v-list-item-title>
-          </v-list-item>
-        </v-list>
+      <!-- Nav Groups -->
+      <nav class="flex-1 px-3 mt-2">
+        <p class="px-3 mb-2 text-[10px] font-bold text-text-muted uppercase tracking-widest">Tools</p>
+        <button
+          v-for="item in sidebarMenu"
+          :key="item.value"
+          @click="navigateSidebar(item.value)"
+          :class="[
+            'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 mb-0.5',
+            isActive(item.value)
+              ? 'bg-accent/10 text-accent border-l-[3px] border-accent pl-[9px]'
+              : 'text-text-secondary hover:text-text-primary hover:bg-white/[0.03]'
+          ]"
+        >
+          <component :is="item.icon" :size="18" />
+          {{ item.title }}
+        </button>
 
-        <!-- Group 2: Archive -->
-        <div class="text-caption font-weight-bold text-grey-darken-1 px-3 mb-2 mt-6 text-uppercase tracking-wider">Archive</div>
-        <v-list density="compact" nav class="bg-transparent pa-0">
-          <v-list-item
-            :active="route.path === '/my-creations'"
-            value="my-creations"
-            @click="navigateSidebar('my-creations')"
-            class="rounded-lg mb-1"
-            selected-class="active-menu-item"
-          >
-            <template v-slot:prepend>
-              <v-icon icon="mdi-folder-play-outline" size="20" class="mr-1"></v-icon>
-            </template>
-            <v-list-item-title class="font-weight-medium text-body-2">My Creations</v-list-item-title>
-          </v-list-item>
-        </v-list>
-      </div>
-    </v-navigation-drawer>
+        <p class="px-3 mb-2 mt-6 text-[10px] font-bold text-text-muted uppercase tracking-widest">Archive</p>
+        <button
+          @click="navigateSidebar('my-creations')"
+          :class="[
+            'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150',
+            route.path === '/my-creations'
+              ? 'bg-accent/10 text-accent border-l-[3px] border-accent pl-[9px]'
+              : 'text-text-secondary hover:text-text-primary hover:bg-white/[0.03]'
+          ]"
+        >
+          <FolderOpen :size="18" />
+          My Creations
+        </button>
+      </nav>
+    </aside>
 
-    <!-- Top App Bar Header -->
-    <v-app-bar
+    <!-- Top Header -->
+    <header
       v-if="!isEditorRoute"
-      color="#0F0F12"
-      elevation="0"
-      height="70"
-      class="border-b border-white border-opacity-5 px-4"
+      class="fixed top-0 left-60 right-0 h-14 bg-surface/80 backdrop-blur-xl border-b border-border z-20 flex items-center justify-between px-6"
     >
-      <!-- Tabs in header -->
-      <v-btn-toggle
-        v-model="activeHeaderTab"
-        mandatory
-        variant="flat"
-        bg-color="transparent"
-        selected-class="text-primary font-weight-black"
-        class="header-toggle-tabs"
-      >
-        <v-btn value="create" class="text-none font-weight-medium px-4 text-subtitle-1">Create</v-btn>
-        <v-btn value="publish" class="text-none font-weight-medium px-4 text-subtitle-1" @click="showFeatureModal('Publishing Manager')">Publish</v-btn>
-      </v-btn-toggle>
+      <div class="flex items-center gap-1">
+        <button
+          v-for="tab in headerTabs"
+          :key="tab.value"
+          @click="onHeaderTab(tab.value)"
+          :class="[
+            'px-4 py-1.5 text-sm font-medium border-b-2 transition-colors',
+            activeHeaderTab === tab.value
+              ? 'border-accent text-white'
+              : 'border-transparent text-text-secondary hover:text-text-primary'
+          ]"
+        >
+          {{ tab.label }}
+        </button>
+      </div>
 
-      <v-spacer></v-spacer>
+      <div class="flex items-center gap-3">
+        <button class="btn-secondary text-xs flex items-center gap-1.5" @click="showFeatureModal('Feedback Portal')">
+          <MessageCircle :size="14" />
+          Feedback
+        </button>
+        <div class="chip chip-primary">
+          <Zap :size="12" />
+          100 Credits
+        </div>
+        <div class="w-8 h-8 rounded-full btn-primary flex items-center justify-center text-xs font-black cursor-pointer">J</div>
+      </div>
+    </header>
 
-      <!-- Right side elements -->
-      <v-btn
-        variant="text"
-        prepend-icon="mdi-comment-question-outline"
-        class="text-none text-grey-lighten-1 mr-2"
-        @click="showFeatureModal('Feedback Portal')">
-        Feedback
-      </v-btn>
-
-      <!-- Coin Credit Badge -->
-      <v-chip
-        variant="outlined"
-        color="primary"
-        class="mr-4 px-3 font-weight-bold"
-        prepend-icon="mdi-lightning-bolt"
-        style="border-color: rgba(255, 107, 74, 0.3) !important;"
-      >
-        100 Credits
-      </v-chip>
-
-      <!-- Profile Avatar -->
-      <v-avatar color="primary" size="36" class="cursor-pointer gradient-btn border border-white border-opacity-20">
-        <span class="text-subtitle-2 font-weight-black text-white">J</span>
-      </v-avatar>
-    </v-app-bar>
-
-    <!-- Main Content Panel -->
-    <v-main class="bg-background relative-content">
-      <v-container class="pt-8 pb-12 px-6" fluid>
-        <!-- Vue Router View -->
+    <!-- Main Content -->
+    <main
+      :class="isEditorRoute ? 'relative z-10' : 'ml-60 pt-14 relative z-10'"
+    >
+      <div :class="isEditorRoute ? '' : 'px-8 py-6'">
         <router-view />
-      </v-container>
-    </v-main>
+      </div>
+    </main>
 
     <!-- Extraction Overlay -->
-    <v-overlay v-model="isExtractingVideo" class="align-center justify-center" persistent scrim="#000" opacity="0.8">
-      <div class="text-center pa-6 rounded-lg bg-black bg-opacity-80 border border-white border-opacity-10 text-white" style="max-width: 320px; z-index: 10000;">
-        <v-progress-circular indeterminate color="primary" size="64" class="mb-4"></v-progress-circular>
-        <div class="text-subtitle-1 font-weight-bold mb-1">Preparing Raw Clip</div>
-        <div class="text-caption text-grey">{{ extractionProgress }}</div>
+    <Teleport to="body">
+      <div v-if="isExtractingVideo" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center">
+        <div class="glass-card p-8 text-center max-w-xs">
+          <div class="spinner mx-auto mb-5"></div>
+          <p class="text-sm font-semibold mb-1">Preparing Raw Clip</p>
+          <p class="text-xs text-text-secondary">{{ extractionProgress }}</p>
+        </div>
       </div>
-    </v-overlay>
+    </Teleport>
 
-    <!-- Feature Coming Soon Dialog -->
-    <v-dialog v-model="featureModal" max-width="400px">
-      <v-card class="glass-card text-center pa-6 rounded-xl border border-white border-opacity-10 text-white" style="background: #111116 !important;">
-        <v-avatar color="rgba(255, 107, 74, 0.1)" size="72" class="mb-4 mx-auto border border-primary border-opacity-25">
-          <v-icon icon="mdi-wrench-clock" color="primary" size="36"></v-icon>
-        </v-avatar>
-        <h3 class="text-h5 font-weight-black mb-2" style="font-family: 'Outfit', sans-serif;">{{ activeFeatureName }}</h3>
-        <p class="text-body-2 text-grey mb-6">This feature is currently in active development on the Clipyzee engine. Stay tuned for updates!</p>
-        <v-btn color="primary" class="gradient-btn font-weight-bold rounded-lg block w-100" @click="featureModal = false">
-          Awesome
-        </v-btn>
-      </v-card>
-    </v-dialog>
-  </v-app>
+    <!-- Feature Coming Soon Modal -->
+    <Teleport to="body">
+      <div v-if="featureModal" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center" @click.self="featureModal = false">
+        <div class="glass-card p-8 text-center max-w-sm w-full mx-4">
+          <div class="w-16 h-16 rounded-full bg-accent/10 border border-accent/25 flex items-center justify-center mx-auto mb-4">
+            <Wrench :size="28" class="text-accent" />
+          </div>
+          <h3 class="font-heading text-xl font-black mb-2">{{ activeFeatureName }}</h3>
+          <p class="text-sm text-text-secondary mb-6">This feature is currently in active development on the Clipyzee engine. Stay tuned for updates!</p>
+          <button class="btn-primary w-full" @click="featureModal = false">Awesome</button>
+        </div>
+      </div>
+    </Teleport>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useWorkspace } from './composables/useWorkspace'
+import { Film, Compass, Clapperboard, FolderOpen, Zap, MessageCircle, Wrench } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
 
-const isEditorRoute = computed(() => {
-  return route.path.startsWith('/studio/editor/')
-})
+const isEditorRoute = computed(() => route.path.startsWith('/studio/editor/'))
 
 const { isExtractingVideo, extractionProgress } = useWorkspace()
 
@@ -158,182 +136,34 @@ const activeHeaderTab = ref('create')
 const featureModal = ref(false)
 const activeFeatureName = ref('')
 
-const showFeatureModal = (featureName: string) => {
-  activeFeatureName.value = featureName
+const showFeatureModal = (name: string) => {
+  activeFeatureName.value = name
   featureModal.value = true
 }
 
-const createMenu = [
-  { title: 'Explore Dashboard', value: 'explore', icon: 'mdi-compass-outline' },
-  { title: 'AI Clipping Studio', value: 'ai-video', icon: 'mdi-movie-creation-outline' }
+const sidebarMenu = [
+  { title: 'Explore Dashboard', value: 'explore', icon: Compass },
+  { title: 'AI Clipping Studio', value: 'ai-video', icon: Clapperboard }
 ]
 
+const headerTabs = [
+  { label: 'Create', value: 'create' },
+  { label: 'Publish', value: 'publish' }
+]
+
+const onHeaderTab = (tab: string) => {
+  activeHeaderTab.value = tab
+  if (tab === 'publish') showFeatureModal('Publishing Manager')
+}
+
+const isActive = (value: string) => {
+  if (value === 'explore') return route.path === '/explore'
+  return route.path.startsWith('/studio')
+}
+
 const navigateSidebar = (tab: string) => {
-  if (tab === 'explore') {
-    router.push('/explore')
-  } else if (tab === 'ai-video') {
-    router.push('/studio/import')
-  } else if (tab === 'my-creations') {
-    router.push('/my-creations')
-  }
+  if (tab === 'explore') router.push('/explore')
+  else if (tab === 'ai-video') router.push('/studio/import')
+  else if (tab === 'my-creations') router.push('/my-creations')
 }
 </script>
-
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=Outfit:wght@400;600;700;900&display=swap');
-
-html, body, .v-application {
-  font-family: 'Inter', sans-serif !important;
-}
-
-.font-monospace {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-}
-
-.glass-card {
-  background: rgba(17, 24, 39, 0.7) !important;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.glass-header {
-  background: rgba(11, 15, 25, 0.8) !important;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.gradient-text {
-  background: linear-gradient(to right, #FF6B4A, #FF3B96);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.gradient-btn {
-  background: linear-gradient(45deg, #FF6B4A, #FF3B96) !important;
-  border: none;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.gradient-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px -6px rgba(255, 107, 74, 0.6);
-}
-
-.animated-bg {
-  position: fixed;
-  top: 0; left: 0; width: 100vw; height: 100vh;
-  z-index: 0;
-  background: radial-gradient(circle at 15% 50%, rgba(255, 107, 74, 0.1), transparent 25%),
-              radial-gradient(circle at 85% 30%, rgba(255, 59, 150, 0.1), transparent 25%);
-  pointer-events: none;
-  animation: pulse-bg 15s infinite alternate ease-in-out;
-}
-
-@keyframes pulse-bg {
-  0% { transform: scale(1); opacity: 0.8; }
-  100% { transform: scale(1.1); opacity: 1; }
-}
-
-.relative-content {
-  position: relative;
-  z-index: 1;
-}
-
-.hover-item {
-  transition: background 0.2s ease, transform 0.2s ease;
-}
-
-.hover-item:hover {
-  background: rgba(255, 255, 255, 0.03);
-  transform: translateX(4px);
-}
-
-.active-menu-item {
-  background: linear-gradient(90deg, rgba(255, 107, 74, 0.12) 0%, rgba(255, 59, 150, 0.12) 100%) !important;
-  color: #FF6B4A !important;
-  border-left: 3px solid #FF6B4A;
-}
-
-.hover-scale-card {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-}
-
-.hover-scale-card:hover {
-  transform: translateY(-4px) scale(1.02);
-  box-shadow: 0 12px 24px rgba(255, 107, 74, 0.2) !important;
-}
-
-.header-toggle-tabs .v-btn {
-  border-radius: 0 !important;
-  border-bottom: 2px solid transparent;
-  color: #9E9E9E !important;
-}
-
-.header-toggle-tabs .v-btn--active {
-  background: transparent !important;
-  border-bottom: 2px solid #FF6B4A !important;
-  color: #FFFFFF !important;
-}
-
-.style-preset-card {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  cursor: pointer;
-  border-radius: 8px !important;
-}
-.style-preset-card:hover {
-  transform: translateY(-2px);
-  background: rgba(255, 255, 255, 0.08) !important;
-}
-.style-preview-text {
-  font-size: 12px;
-  font-weight: 900;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-.style-preview-text.default {
-  color: #FFFF00; /* Yellow */
-  font-family: 'Arial Black', sans-serif;
-  text-shadow: 2px 2px 0px #000;
-  background: #222;
-}
-.style-preview-text.cyberpunk {
-  color: #00FF00; /* Neon Green */
-  font-family: 'Impact', sans-serif;
-  text-shadow: 2px 2px 0px #000;
-  background: #111;
-}
-.style-preview-text.cute {
-  color: #FF00FF; /* Pink */
-  font-family: 'Comic Sans MS', sans-serif;
-  text-shadow: 1px 1px 0px #82004B;
-  background: #fff;
-}
-.style-preview-text.minimalist {
-  color: #00FFFF; /* Cyan */
-  font-family: 'Arial', sans-serif;
-  background: rgba(0,0,0,0.8);
-  border: 1px solid #00FFFF;
-}
-.timeline-track::-webkit-scrollbar {
-  height: 6px;
-}
-.timeline-track::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.2);
-}
-.timeline-track::-webkit-scrollbar-thumb {
-  background: rgba(255, 107, 74, 0.3);
-  border-radius: 3px;
-}
-.timeline-track::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 107, 74, 0.6);
-}
-.timeline-block {
-  border-left: 4px solid #FF6B4A !important;
-}
-.timeline-block.active-block {
-  border-left: 4px solid #FF3B96 !important;
-}
-</style>

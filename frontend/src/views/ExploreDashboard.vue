@@ -1,77 +1,80 @@
 <template>
   <div>
-    <h2 class="text-h4 font-weight-bold text-white mb-1" style="font-family: 'Outfit', sans-serif;">What would you like to create today?</h2>
-    <p class="text-body-1 text-grey mb-8">Choose a pipeline template or tools workflow to begin your AI generation.</p>
+    <!-- Page Heading -->
+    <h1 class="font-heading text-2xl font-bold text-text-primary mb-1">What would you like to create today?</h1>
+    <p class="text-sm text-text-secondary mb-8">Choose a pipeline template or tools workflow to begin your AI generation.</p>
 
-    <!-- Quick Action Grid -->
-    <v-row class="mb-8">
-      <v-col cols="12" sm="6" md="6" v-for="card in quickCards" :key="card.title">
-        <v-card
-          :style="{ background: card.gradient }"
-          class="rounded-xl pa-4 text-white hover-scale-card cursor-pointer d-flex flex-column justify-space-between relative-content"
-          style="height: 140px; overflow: hidden;"
-          @click="onQuickCardClick(card)"
-        >
-          <v-icon :icon="card.icon" size="28" class="align-self-start opacity-80"></v-icon>
-          <div>
-            <div class="font-weight-black text-h6 text-uppercase tracking-wider" style="line-height: 1.2;">{{ card.title }}</div>
-            <div class="text-caption opacity-75 mt-0.5">Start workspace</div>
-          </div>
-        </v-card>
-      </v-col>
-    </v-row>
-
-    <!-- Featured Banner Showcase Carousel -->
-    <v-card class="mb-8 overflow-hidden rounded-xl border border-white border-opacity-5" style="background: linear-gradient(100deg, #13131A 0%, #0F0F12 100%); height: 260px;" elevation="4">
-      <v-window v-model="bannerIndex" show-arrows class="h-100">
-        <v-window-item v-for="(b, i) in bannerSlides" :key="i" class="h-100">
-          <div class="d-flex h-100 pa-8 align-center relative-content justify-space-between">
-            <!-- Text Section -->
-            <div style="max-width: 60%; z-index: 2;">
-              <v-chip color="primary" variant="flat" size="x-small" class="font-weight-bold mb-3 px-2 text-uppercase tracking-widest">{{ b.subtitle }}</v-chip>
-              <h1 class="text-h4 font-weight-black text-white mb-2" style="line-height: 1.2; font-family: 'Outfit', sans-serif;">{{ b.title }}</h1>
-              <p class="text-body-2 text-grey mb-4" style="max-width: 480px;">{{ b.desc }}</p>
-              <v-btn color="primary" class="gradient-btn px-6 font-weight-bold rounded-lg text-none" @click="onBannerAction(b)">
-                {{ b.btnText }}
-              </v-btn>
-            </div>
-            <!-- Right Graphic placeholder -->
-            <v-avatar color="rgba(255,255,255,0.02)" size="140" class="mr-8 border border-white border-opacity-5">
-              <v-icon icon="mdi-creation" color="primary" size="48"></v-icon>
-            </v-avatar>
-            <!-- Visual Gradient Orb background -->
-            <div class="visual-orb" :style="{ background: b.orbColor, position: 'absolute', right: '-5%', top: '-20%', width: '300px', height: '300px', filter: 'blur(100px)', opacity: '0.15', borderRadius: '50%' }"></div>
-          </div>
-        </v-window-item>
-      </v-window>
-    </v-card>
-
-    <!-- AI Tools Grid -->
-    <div class="text-h6 font-weight-black text-white mb-4 d-flex align-center mt-6" style="font-family: 'Outfit', sans-serif;">
-      <v-icon icon="mdi-creation" color="primary" class="mr-2" size="small"></v-icon>
-      Core Features
+    <!-- Quick Action Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
+      <button
+        v-for="card in quickCards"
+        :key="card.title"
+        @click="onQuickCardClick(card)"
+        class="relative overflow-hidden rounded-xl p-5 text-white text-left h-[130px] flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_12px_24px_rgba(255,107,74,0.2)] cursor-pointer group"
+        :style="{ background: card.gradient }"
+      >
+        <component :is="card.icon" :size="24" class="opacity-80" />
+        <div>
+          <div class="font-heading text-base font-black uppercase tracking-wider leading-tight">{{ card.title }}</div>
+          <div class="text-xs opacity-70 mt-0.5">Start workspace</div>
+        </div>
+      </button>
     </div>
-    <v-row>
-      <v-col cols="12" sm="6" md="3" v-for="t in aiToolsList" :key="t.title">
-        <v-card
-          class="pa-4 bg-surface rounded-xl border border-white border-opacity-5 hover-item text-center cursor-pointer d-flex flex-column align-center justify-center relative-content"
-          style="height: 180px;"
-          @click="$emit('show-feature', t.title)"
-        >
-          <v-avatar color="rgba(255,255,255,0.02)" size="48" class="mb-3 border border-white border-opacity-5">
-            <v-icon :icon="t.icon" color="primary" size="20"></v-icon>
-          </v-avatar>
-          <div class="text-subtitle-2 font-weight-bold text-white mb-1">{{ t.title }}</div>
-          <div class="text-caption text-grey" style="line-height: 1.3;">{{ t.desc }}</div>
-        </v-card>
-      </v-col>
-    </v-row>
+
+    <!-- Hero Banner -->
+    <div class="glass-card overflow-hidden mb-10 h-[230px] relative">
+      <div class="flex h-full p-8 items-center justify-between">
+        <!-- Text -->
+        <div class="max-w-[60%] relative z-10">
+          <span class="chip chip-primary mb-3">{{ activeBanner.subtitle }}</span>
+          <h2 class="font-heading text-2xl font-black text-text-primary mb-2 leading-tight">{{ activeBanner.title }}</h2>
+          <p class="text-sm text-text-secondary mb-5 max-w-md">{{ activeBanner.desc }}</p>
+          <button class="btn-primary text-sm" @click="onBannerAction">{{ activeBanner.btnText }}</button>
+        </div>
+        <!-- Icon -->
+        <div class="w-28 h-28 rounded-full border border-border flex items-center justify-center mr-6 relative z-10">
+          <Sparkles :size="36" class="text-accent" />
+        </div>
+        <!-- Glow -->
+        <div class="absolute -right-[5%] -top-[20%] w-[300px] h-[300px] rounded-full blur-[100px] opacity-15" :style="{ background: activeBanner.orbColor }"></div>
+      </div>
+      <!-- Dots navigation -->
+      <div class="absolute bottom-4 left-8 flex gap-1.5 z-10">
+        <button
+          v-for="(_, i) in bannerSlides"
+          :key="i"
+          @click="bannerIndex = i"
+          :class="['w-2 h-2 rounded-full transition-all duration-200', bannerIndex === i ? 'bg-accent w-5' : 'bg-white/20']"
+        />
+      </div>
+    </div>
+
+    <!-- Core Features Grid -->
+    <div class="flex items-center gap-2 mb-5 mt-8">
+      <Sparkles :size="16" class="text-accent" />
+      <h3 class="font-heading text-base font-black text-text-primary">Core Features</h3>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <button
+        v-for="t in aiToolsList"
+        :key="t.title"
+        class="glass-card p-5 text-center flex flex-col items-center justify-center h-[160px] transition-all duration-200 hover:bg-white/[0.03] hover:-translate-y-0.5 cursor-pointer"
+        @click="$emit('show-feature', t.title)"
+      >
+        <div class="w-11 h-11 rounded-lg border border-border bg-white/[0.02] flex items-center justify-center mb-3">
+          <component :is="t.icon" :size="18" class="text-accent" />
+        </div>
+        <div class="text-xs font-bold text-text-primary mb-1">{{ t.title }}</div>
+        <div class="text-[11px] text-text-secondary leading-snug">{{ t.desc }}</div>
+      </button>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { Clapperboard, Type, Sparkles, Subtitles, Move, Palette, Film } from 'lucide-vue-next'
 
 defineEmits<{
   (e: 'show-feature', featureName: string): void;
@@ -81,8 +84,8 @@ const router = useRouter()
 const bannerIndex = ref(0)
 
 const quickCards = [
-  { title: 'AI Clipping Studio', icon: 'mdi-movie-creation-outline', gradient: 'linear-gradient(135deg, #FF6B4A 0%, #FF3B96 100%)', tab: 'ai-video' },
-  { title: 'Subtitle Stylist', icon: 'mdi-format-size', gradient: 'linear-gradient(135deg, #FF963B 0%, #FF3B3B 100%)', tab: 'ai-video' }
+  { title: 'AI Clipping Studio', icon: Clapperboard, gradient: 'linear-gradient(135deg, #FF6B4A 0%, #FF3B96 100%)', tab: 'ai-video' },
+  { title: 'Subtitle Stylist', icon: Type, gradient: 'linear-gradient(135deg, #FF963B 0%, #FF3B3B 100%)', tab: 'ai-video' }
 ]
 
 const bannerSlides = [
@@ -112,18 +115,20 @@ const bannerSlides = [
   }
 ]
 
+const activeBanner = computed(() => bannerSlides[bannerIndex.value])
+
 const aiToolsList = [
-  { title: 'Auto Subtitles', desc: 'Word-level timeline generator', icon: 'mdi-text-box-outline' },
-  { title: 'Pan & Scan', desc: 'Drag-to-pan visual camera angles', icon: 'mdi-crop' },
-  { title: 'Word Stylist', desc: 'Paint individual subtitle characters', icon: 'mdi-palette-swatch' },
-  { title: 'Multi-Ratio Render', desc: '9:16 vertical, 1:1 square, or 4:3 standard outputs', icon: 'mdi-movie-open-outline' }
+  { title: 'Auto Subtitles', desc: 'Word-level timeline generator', icon: Subtitles },
+  { title: 'Pan & Scan', desc: 'Drag-to-pan visual camera angles', icon: Move },
+  { title: 'Word Stylist', desc: 'Paint individual subtitle characters', icon: Palette },
+  { title: 'Multi-Ratio Render', desc: '9:16 vertical, 1:1 square, or 4:3', icon: Film }
 ]
 
 const onQuickCardClick = (_card: any) => {
   router.push('/studio/import')
 }
 
-const onBannerAction = (_slide: any) => {
+const onBannerAction = () => {
   router.push('/studio/import')
 }
 </script>

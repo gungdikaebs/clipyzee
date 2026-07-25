@@ -1,47 +1,46 @@
 <template>
   <div>
-    <div class="d-flex align-center justify-space-between mb-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
       <div>
-        <h2 class="text-h4 font-weight-bold text-white mb-1" style="font-family: 'Outfit', sans-serif;">My Creations</h2>
-        <p class="text-body-1 text-grey">Load history records, download rendered files, or continue editing your candidate outputs.</p>
+        <h1 class="font-heading text-2xl font-bold text-text-primary mb-1">My Creations</h1>
+        <p class="text-sm text-text-secondary">Load history records, download rendered files, or continue editing your candidate outputs.</p>
       </div>
-      <v-btn icon="mdi-refresh" variant="outlined" color="grey" class="rounded-lg" :loading="isFetchingHistory" @click="fetchHistory"></v-btn>
+      <button class="btn-secondary p-2.5 rounded-lg" :disabled="isFetchingHistory" @click="fetchHistory">
+        <RefreshCw :size="16" :class="{ 'animate-spin': isFetchingHistory }" />
+      </button>
     </div>
 
-    <v-row v-if="history.length > 0">
-      <v-col cols="12" md="6" lg="4" v-for="item in history" :key="item.id">
-        <v-card class="glass-card rounded-xl pa-4 d-flex flex-column relative-content" style="min-height: 200px;" elevation="4">
-          <div class="text-caption text-primary font-weight-bold mb-1 text-uppercase tracking-wider">Analysis Run</div>
-          <h3 class="text-h6 font-weight-bold text-white mb-1 text-truncate" style="line-height: 1.3;">
-            {{ item.title && item.title !== 'Pending Title Fetch' ? item.title : item.sourceUrl }}
-          </h3>
-          <div class="text-caption text-grey mb-4">Processed on: {{ formatDate(item.createdAt) }}</div>
-          
-          <v-spacer></v-spacer>
-          
-          <div class="d-flex align-center justify-space-between border-t border-white border-opacity-5 pt-3">
-            <span class="text-caption text-grey font-weight-bold">
-              <v-icon icon="mdi-video-outline" size="small" class="mr-1"></v-icon>
-              {{ getClipsCount(item) }} Clip Candidates
-            </span>
-            
-            <v-btn
-              color="primary"
-              variant="flat"
-              size="small"
-              class="rounded-lg font-weight-bold text-none px-4 gradient-btn"
-              @click="handleLoadHistory(item)"
-            >
-              Open Studio
-            </v-btn>
-          </div>
-        </v-card>
-      </v-col>
-    </v-row>
-    <div v-else class="text-center py-12 text-grey">
-      <v-icon icon="mdi-folder-open-outline" size="64" class="mb-4 text-grey-darken-1"></v-icon>
-      <div class="text-h6 text-grey-lighten-1">No creations found yet</div>
-      <div class="text-body-2">Analyze a YouTube video in the Explore tab to get started.</div>
+    <!-- Cards Grid -->
+    <div v-if="history.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div
+        v-for="item in history"
+        :key="item.id"
+        class="glass-card p-5 flex flex-col min-h-[190px]"
+      >
+        <span class="chip chip-primary mb-2 self-start">Analysis Run</span>
+        <h3 class="text-sm font-bold text-text-primary mb-1 truncate leading-snug">
+          {{ item.title && item.title !== 'Pending Title Fetch' ? item.title : item.sourceUrl }}
+        </h3>
+        <p class="text-xs text-text-muted mb-auto">Processed on: {{ formatDate(item.createdAt) }}</p>
+
+        <div class="flex items-center justify-between pt-3 mt-3 border-t border-border">
+          <span class="text-xs text-text-secondary font-semibold flex items-center gap-1.5">
+            <Film :size="13" />
+            {{ getClipsCount(item) }} Clip Candidates
+          </span>
+          <button class="btn-primary text-xs py-1.5 px-4" @click="handleLoadHistory(item)">
+            Open Studio
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div v-else class="text-center py-16">
+      <FolderOpen :size="48" class="text-text-muted mx-auto mb-4" />
+      <p class="text-base text-text-secondary font-medium">No creations found yet</p>
+      <p class="text-sm text-text-muted mt-1">Analyze a YouTube video in the Explore tab to get started.</p>
     </div>
   </div>
 </template>
@@ -50,6 +49,7 @@
 import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useWorkspace } from '../composables/useWorkspace'
+import { RefreshCw, Film, FolderOpen } from 'lucide-vue-next'
 
 const router = useRouter()
 const { history, isFetchingHistory, fetchHistory, loadHistoryItem } = useWorkspace()
