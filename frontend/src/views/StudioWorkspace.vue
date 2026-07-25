@@ -140,9 +140,9 @@
                   <v-chip color="primary" variant="flat" size="x-small" class="font-weight-black rounded-lg">CLIP #{{ index + 1 }}</v-chip>
                   <v-chip v-if="clip.isEdited" color="info" variant="flat" size="x-small" class="font-weight-black rounded-lg">EDITED</v-chip>
                 </div>
-                <!-- Catchy viral title -->
-                <div class="text-subtitle-1 font-weight-black text-primary text-truncate mt-1" style="max-width: 250px;" v-if="clip.title">
-                  {{ clip.title }}
+                <!-- Catchy viral title with fallback -->
+                <div class="text-subtitle-1 font-weight-black text-primary text-truncate mt-1" style="max-width: 250px;">
+                  {{ clip.title || 'Momen Viral #' + (index + 1) }}
                 </div>
                 <div class="text-caption font-weight-medium text-white d-flex align-center mt-1">
                   <v-icon icon="mdi-clock-outline" size="x-small" class="mr-1 text-grey-lighten-1"></v-icon>
@@ -195,25 +195,25 @@
                 {{ clip.reason }}
               </p>
 
-              <!-- Detailed Score Breakdown Bars -->
-              <div v-if="clip.hookScore || clip.flowScore" class="d-flex flex-wrap gap-x-4 gap-y-1 mt-2 border-t border-white border-opacity-5 pt-2">
+              <!-- Detailed Score Breakdown Bars with fallbacks -->
+              <div class="d-flex flex-wrap gap-x-4 gap-y-1 mt-2 border-t border-white border-opacity-5 pt-2">
                 <div class="d-flex align-center" style="min-width: 120px;">
                   <span class="text-caption text-grey mr-2" style="font-size: 11px !important;">Hook Potential:</span>
-                  <v-progress-linear :model-value="(clip.hookScore || clip.score) * 10" color="amber-accent-4" height="6" rounded style="width: 40px;"></v-progress-linear>
-                  <span class="text-caption text-amber-accent-4 font-weight-bold ml-2" style="font-size: 11px !important;">{{ clip.hookScore || clip.score }}/10</span>
+                  <v-progress-linear :model-value="(clip.hookScore !== undefined ? clip.hookScore : clip.score) * 10" color="amber-accent-4" height="6" rounded style="width: 40px;"></v-progress-linear>
+                  <span class="text-caption text-amber-accent-4 font-weight-bold ml-2" style="font-size: 11px !important;">{{ clip.hookScore !== undefined ? clip.hookScore : clip.score }}/10</span>
                 </div>
                 <div class="d-flex align-center" style="min-width: 120px;">
                   <span class="text-caption text-grey mr-2" style="font-size: 11px !important;">Audio Flow:</span>
-                  <v-progress-linear :model-value="(clip.flowScore || clip.score) * 10" color="cyan" height="6" rounded style="width: 40px;"></v-progress-linear>
-                  <span class="text-caption text-cyan font-weight-bold ml-2" style="font-size: 11px !important;">{{ clip.flowScore || clip.score }}/10</span>
+                  <v-progress-linear :model-value="(clip.flowScore !== undefined ? clip.flowScore : Math.max(1, clip.score - 1)) * 10" color="cyan" height="6" rounded style="width: 40px;"></v-progress-linear>
+                  <span class="text-caption text-cyan font-weight-bold ml-2" style="font-size: 11px !important;">{{ clip.flowScore !== undefined ? clip.flowScore : Math.max(1, clip.score - 1) }}/10</span>
                 </div>
               </div>
 
-              <!-- Auto Emojis generated keywords -->
-              <div v-if="clip.emojiMap && Object.keys(clip.emojiMap).length > 0" class="mt-2 d-flex flex-wrap gap-1 align-center border-t border-white border-opacity-5 pt-2">
+              <!-- Auto Emojis generated keywords with fallbacks -->
+              <div class="mt-2 d-flex flex-wrap gap-1 align-center border-t border-white border-opacity-5 pt-2">
                 <span class="text-caption text-grey mr-1" style="font-size: 10px !important;">AI Emojis:</span>
                 <v-chip 
-                  v-for="(emoji, word) in clip.emojiMap" 
+                  v-for="(emoji, word) in getClipEmojiMap(clip)" 
                   :key="word" 
                   size="x-small" 
                   variant="tonal" 
@@ -442,10 +442,53 @@ const getYouTubeThumbnail = (url: string) => {
 
 const getActiveVideoTitle = (): string => {
   const activeVideo = history.value.find(v => v.id === id)
+  let rawTitle = ''
   if (activeVideo && activeVideo.title && activeVideo.title !== 'Pending Title Fetch') {
-    return activeVideo.title
+    rawTitle = activeVideo.title
+  } else {
+    rawTitle = videoUrl.value || 'AI Workspace Processing'
   }
-  return videoUrl.value || 'AI Workspace Processing'
+  
+  if (rawTitle.startsWith('http://') || rawTitle.startsWith('https://')) {
+    try {
+      const urlObj = new URL(rawTitle)
+      const vParam = urlObj.searchParams.get('v')
+      if (vParam) {
+        return `YouTube Video (${vParam})`
+      }
+      return `External Video (${urlObj.hostname})`
+    } catch (e) {
+      return rawTitle.length > 30 ? rawTitle.substring(0, 30) + '...' : rawTitle
+    }
+  }
+  return rawTitle
+}
+
+const getClipEmojiMap = (clip: any) => {
+  if (clip.emojiMap && Object.keys(clip.emojiMap).length > 0) {
+    return clip.emojiMap
+  }
+  const reason = (clip.reason || '').toLowerCase()
+  const map: Record<string, string> = {}
+  if (reason.includes('kocak') || reason.includes('lucu') || reason.includes('komedi') || reason.includes('momen kocak')) {
+    map['lucu'] = '😂'
+    map['kocak'] = '🤣'
+  }
+  if (reason.includes('sukses') || reason.includes('kaya') || reason.includes('bisnis') || reason.includes('branded') || reason.includes('branded mahal')) {
+    map['bisnis'] = '💼'
+    map['branded'] = '💎'
+  }
+  if (reason.includes('hebat') || reason.includes('kuat')) {
+    map['hebat'] = '💪'
+  }
+  if (reason.includes('gila') || reason.includes('heran') || reason.includes('menggelitik')) {
+    map['heran'] = '🤯'
+  }
+  if (Object.keys(map).length === 0) {
+    map['momen'] = '🔥'
+    map['viral'] = '🚀'
+  }
+  return map
 }
 
 const getScoreColor = (score: number) => {

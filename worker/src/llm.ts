@@ -33,11 +33,16 @@ export const analyzeTranscript = async (transcript: string): Promise<ClipCandida
     Tugas Anda:
     Analisis transkrip video ber-timestamp berikut ini dan temukan 1 hingga 5 momen terbaik (paling menarik, lucu, berenergi tinggi, menginspirasi, kontroversial, atau memiliki nilai edukasi tinggi) untuk dijadikan video pendek/short-form clip.
 
+    KRITIS - ATURAN PENCEGAHAN CERITA TERPOTONG GANTUNG (STORY COMPLETENESS):
+    Sangat penting agar klip tidak terpotong saat narasumber masih bercerita atau menjelaskan sesuatu. Anda HARUS mengikuti aturan ketat berikut:
+    1. Keutuhan Gagasan (Semantic Resolution): Klip harus mencakup struktur cerita lengkap: Pengenalan/Setup -> Pembahasan/Core -> Kesimpulan/Punchline/Resolusi. Jangan pernah memotong klip di tengah-tengah penjelasan sebelum narasumber menyelesaikan inti argumen atau cerita yang dibawakannya.
+    2. Periksa Transkrip Kelanjutan: Perhatikan kalimat-kalimat setelah waktu selesai (end) yang Anda rencanakan. Jika kalimat selanjutnya diawali kata sambung penjelas (seperti: "Jadi...", "Namun...", "Tapi...", "Akhirnya...", "Sebab itu...") atau narasumber masih dalam satu nafas meneruskan cerita, perpanjang batas waktu selesai (end) klip tersebut hingga cerita tersebut benar-benar ditutup secara tuntas.
+    3. Batas Waktu Rapi (Clean Boundaries): Batas waktu mulai (start) dan selesai (end) klip harus benar-benar rapi di awal dan akhir kalimat penuh. Jangan memotong di tengah-tengah kata, kalimat menggantung, atau di tengah-tengah keheningan panjang.
+
     Kriteria Klip yang Bagus:
-    1. Durasi Klip: Setiap klip harus berdurasi antara 15 hingga 60 detik (durasi ideal: 20 hingga 45 detik).
+    1. Durasi Klip: Setiap klip berdurasi antara 15 hingga 60 detik (durasi ideal: 20 hingga 45 detik). Namun, jika cerita yang luar biasa membutuhkan waktu hingga 75-90 detik agar selesai secara tuntas dan tidak menggantung, Anda diperbolehkan memperluas batas durasi maksimal hingga 90 detik. Keutuhan cerita narasumber adalah prioritas utama!
     2. Memiliki Hook yang Kuat: 3-5 detik pertama klip harus memiliki daya tarik yang sangat kuat (misalnya berupa pertanyaan retoris, opini kontroversial/panas, pernyataan mengejutkan, klimaks lelucon, atau emosi yang meledak-ledak) agar penonton tidak langsung melakukan scroll.
     3. Mandiri & Cohesive (Self-Contained): Klip harus berupa satu topik atau cerita utuh yang dapat dimengerti secara mandiri tanpa memerlukan penjelasan/konteks tambahan dari sisa video.
-    4. Batas Waktu Rapi (Clean Boundaries): Waktu mulai (start) dan selesai (end) klip harus benar-benar rapi di awal dan akhir kalimat penuh. Jangan memotong di tengah-tengah kata, kalimat menggantung, atau di tengah-tengah keheningan panjang.
 
     Hal yang HARUS Dihindari:
     - Jangan mengambil bagian pembuka video (Intro seperti "Halo guys, selamat datang kembali...", "Di video kali ini kita akan...") atau penutup (Outro seperti "Jangan lupa subscribe, like, comment...", "Sampai jumpa di video selanjutnya...").

@@ -60,7 +60,7 @@
                     :key="wIdx"
                     :style="getWordPreviewStyle(w)"
                   >
-                    {{ w.text }}
+                    {{ formatWordWithEmoji(w) }}
                   </span>
                 </div>
               </div>
@@ -224,7 +224,7 @@
                       textShadow: w.outlineColor ? `2px 2px 0px ${w.outlineColor}` : `2px 2px 0px ${getPresetDefaultOutline()}`
                     }"
                   >
-                    {{ w.text }}
+                    {{ formatWordWithEmoji(w) }}
                   </span>
                 </div>
               </div>
@@ -453,10 +453,11 @@ const aspectRatios = [
 ]
 
 const subtitleStyles = [
-  { text: 'DEFAULT (Solo Kuning)', value: 'DEFAULT' },
+  { text: 'HORMOZI (Solo Yellow)', value: 'HORMOZI' },
+  { text: 'MRBEAST (Alternating Neon)', value: 'MRBEAST' },
   { text: 'CYBERPUNK (Neon Green)', value: 'CYBERPUNK' },
   { text: 'CUTE (Sweet Pink)', value: 'CUTE' },
-  { text: 'MINIMALIST (Clean Cyan)', value: 'MINIMALIST' }
+  { text: 'MINIMALIST (Clean White)', value: 'MINIMALIST' }
 ]
 
 const textColors = [
@@ -575,9 +576,11 @@ const getPresetDefaultColor = () => {
   const styleName = editorState.value.subtitleStyle || 'DEFAULT'
   const defaultInactiveColors: Record<string, string> = {
     DEFAULT: '#FFFFFF',
+    HORMOZI: '#FFFFFF',
+    MRBEAST: '#FFFFFF',
     CYBERPUNK: '#FFFFFF',
     CUTE: '#FFFFFF',
-    MINIMALIST: '#F0F0F0'
+    MINIMALIST: '#FFFFFF'
   }
   return defaultInactiveColors[styleName] || '#FFFFFF'
 }
@@ -586,9 +589,11 @@ const getPresetDefaultOutline = () => {
   const styleName = editorState.value.subtitleStyle || 'DEFAULT'
   const defaultOutlines: Record<string, string> = {
     DEFAULT: '#000000',
+    HORMOZI: '#000000',
+    MRBEAST: '#000000',
     CYBERPUNK: '#000000',
     CUTE: '#82004B',
-    MINIMALIST: '#00FFFF'
+    MINIMALIST: ''
   }
   return defaultOutlines[styleName] || '#000000'
 }
@@ -619,36 +624,81 @@ const isWordActiveSpoken = (w: any) => {
   return t >= w.start && t <= w.end
 }
 
+const formatWordWithEmoji = (w: any) => {
+  if (!w || !w.text) return ''
+  let text = w.text
+  if (activeClip.value && activeClip.value.emojiMap) {
+    const cleanWord = w.text.toLowerCase().replace(/[^a-zA-Z0-9]/g, '')
+    for (const [key, emoji] of Object.entries(activeClip.value.emojiMap)) {
+      const cleanKey = key.toLowerCase().replace(/[^a-zA-Z0-9]/g, '')
+      if (cleanWord === cleanKey || cleanWord.includes(cleanKey) || cleanKey.includes(cleanWord)) {
+        text += ` ${emoji}`
+        break
+      }
+    }
+  }
+  const styleName = editorState.value.subtitleStyle || 'DEFAULT'
+  if (styleName === 'HORMOZI' || styleName === 'MRBEAST') {
+    return text.toUpperCase()
+  }
+  return text
+}
+
 const getWordPreviewStyle = (w: any) => {
   const isActive = isWordActiveSpoken(w)
   const styleName = editorState.value.subtitleStyle || 'DEFAULT'
   const activeColors: Record<string, string> = {
     DEFAULT: '#FFFF00',
+    HORMOZI: '#FFFF00',
     CYBERPUNK: '#00FF00',
     CUTE: '#FF00FF',
     MINIMALIST: '#FFFF00'
   }
   const defaultInactiveColors: Record<string, string> = {
     DEFAULT: '#FFFFFF',
+    HORMOZI: '#FFFFFF',
+    MRBEAST: '#FFFFFF',
     CYBERPUNK: '#FFFFFF',
     CUTE: '#FFFFFF',
-    MINIMALIST: '#F0F0F0'
+    MINIMALIST: '#FFFFFF'
   }
   
-  const primaryColor = isActive 
-    ? activeColors[styleName] 
-    : (w.textColor || defaultInactiveColors[styleName])
+  let primaryColor = w.textColor
+  if (isActive) {
+    if (styleName === 'MRBEAST') {
+      const colors = ['#FFFF00', '#00FFFF', '#00FF00', '#FF3366']
+      const charSum = w.text.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0)
+      primaryColor = colors[charSum % colors.length]
+    } else {
+      primaryColor = activeColors[styleName] || '#FFFF00'
+    }
+  } else {
+    primaryColor = w.textColor || defaultInactiveColors[styleName] || '#FFFFFF'
+  }
     
-  const outlineColor = w.outlineColor || '#000000'
+  const outlineColor = w.outlineColor || (styleName === 'MINIMALIST' ? '' : '#000000')
   
   const fontStyle: Record<string, any> = {
     DEFAULT: { fontFamily: "'Arial Black', sans-serif", fontSize: '24px' },
+    HORMOZI: { fontFamily: "'Arial Black', sans-serif", fontSize: '25px' },
+    MRBEAST: { fontFamily: "'Impact', sans-serif", fontSize: '28px' },
     CYBERPUNK: { fontFamily: "'Impact', sans-serif", fontSize: '28px' },
     CUTE: { fontFamily: "'Comic Sans MS', sans-serif", fontSize: '22px' },
     MINIMALIST: { fontFamily: "'Arial', sans-serif", fontSize: '20px' }
   }
   
   const selectedFont = fontStyle[styleName] || fontStyle.DEFAULT
+  
+  let transform = 'scale(1)'
+  if (isActive) {
+    if (styleName === 'HORMOZI') {
+      transform = 'scale(1.2) rotate(-3deg)'
+    } else if (styleName === 'MRBEAST') {
+      transform = 'scale(1.25) rotate(3deg)'
+    } else if (styleName === 'CYBERPUNK') {
+      transform = 'scale(1.1) translateY(-2px)'
+    }
+  }
   
   return {
     color: primaryColor,
@@ -657,7 +707,8 @@ const getWordPreviewStyle = (w: any) => {
     textShadow: outlineColor ? `2px 2px 0px ${outlineColor}, -2px -2px 0px ${outlineColor}, 2px -2px 0px ${outlineColor}, -2px 2px 0px ${outlineColor}` : 'none',
     marginRight: '6px',
     display: 'inline-block',
-    transition: 'color 0.1s ease',
+    transform: transform,
+    transition: 'transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275), color 0.1s ease',
     fontWeight: '900',
     letterSpacing: '1px'
   }
@@ -765,7 +816,7 @@ const previewFrameStyle = computed(() => {
 const onTimeUpdate = (e: Event) => {
   const target = e.target as HTMLVideoElement
   if (activeClip.value) {
-    playerCurrentTime.value = activeClip.value.start + target.currentTime
+    playerCurrentTime.value = Number(activeClip.value.start) + target.currentTime
   }
 }
 
@@ -841,12 +892,16 @@ const onTimelineTrackClick = (e: MouseEvent) => {
   const rect = track.getBoundingClientRect()
   const clickX = e.clientX - rect.left
   const relativeClickSeconds = clickX / 20
-  const targetAbsoluteTime = activeClip.value.start + relativeClickSeconds
+  
+  const clipStart = Number(activeClip.value.start)
+  const targetAbsoluteTime = clipStart + relativeClickSeconds
   
   const video = document.getElementById('editor-video-player') as HTMLVideoElement | null
   if (video) {
-    video.currentTime = Math.max(0, targetAbsoluteTime - activeClip.value.start)
-    playerCurrentTime.value = targetAbsoluteTime
+    const targetCurrentTime = Math.max(0, targetAbsoluteTime - clipStart)
+    // Clamp currentTime to the actual video duration to prevent out of bounds resets
+    video.currentTime = Math.min(video.duration || (Number(activeClip.value.end) - clipStart), targetCurrentTime)
+    playerCurrentTime.value = clipStart + video.currentTime
   }
 }
 

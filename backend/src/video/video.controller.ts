@@ -30,12 +30,6 @@ export class VideoController {
 
   @Get('download')
   downloadFile(@Query('path') filePath: string, @Res() res: Response) {
-    const filename = filePath.split('/').pop() || 'clip.mp4';
-    res.set({
-      'Content-Type': 'video/mp4',
-      'Content-Disposition': `attachment; filename="${filename}"`,
-    });
-    const fileStream = createReadStream(filePath);
-    fileStream.pipe(res);
+    res.sendFile(filePath);
   }
 }
