@@ -2,17 +2,14 @@
   <div>
     <!-- Page Heading -->
     <h1 class="font-heading text-2xl font-bold text-text-primary mb-1">What would you like to create today?</h1>
-    <p class="text-sm text-text-secondary mb-8">Choose a pipeline template or tools workflow to begin your AI generation.</p>
+    <p class="text-sm text-text-secondary mb-8">Choose a pipeline template or tools workflow to begin your AI
+      generation.</p>
 
     <!-- Quick Action Cards -->
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
-      <button
-        v-for="card in quickCards"
-        :key="card.title"
-        @click="onQuickCardClick(card)"
+      <button v-for="card in quickCards" :key="card.title" @click="onQuickCardClick(card)"
         class="relative overflow-hidden rounded-xl p-5 text-white text-left h-[130px] flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_12px_24px_rgba(255,107,74,0.2)] cursor-pointer group"
-        :style="{ background: card.gradient }"
-      >
+        :style="{ background: card.gradient }">
         <component :is="card.icon" :size="24" class="opacity-80" />
         <div>
           <div class="font-heading text-base font-black uppercase tracking-wider leading-tight">{{ card.title }}</div>
@@ -22,30 +19,28 @@
     </div>
 
     <!-- Hero Banner -->
-    <div class="glass-card overflow-hidden mb-10 h-[230px] relative">
+    <div class="glass-card overflow-hidden mb-10 h-[280px] relative">
       <div class="flex h-full p-8 items-center justify-between">
         <!-- Text -->
         <div class="max-w-[60%] relative z-10">
           <span class="chip chip-primary mb-3">{{ activeBanner.subtitle }}</span>
-          <h2 class="font-heading text-2xl font-black text-text-primary mb-2 leading-tight">{{ activeBanner.title }}</h2>
+          <h2 class="font-heading text-2xl font-black text-text-primary mb-2 leading-tight">{{ activeBanner.title }}
+          </h2>
           <p class="text-sm text-text-secondary mb-5 max-w-md">{{ activeBanner.desc }}</p>
           <button class="btn-primary text-sm" @click="onBannerAction">{{ activeBanner.btnText }}</button>
         </div>
         <!-- Icon -->
-        <div class="w-28 h-28 rounded-full border border-border flex items-center justify-center mr-6 relative z-10">
+        <div class="w-28 h-28 rounded-full border border-border flex items-center justify-center mr-6 relative z-10 ">
           <Sparkles :size="36" class="text-accent" />
         </div>
         <!-- Glow -->
-        <div class="absolute -right-[5%] -top-[20%] w-[300px] h-[300px] rounded-full blur-[100px] opacity-15" :style="{ background: activeBanner.orbColor }"></div>
+        <div class="absolute -right-[5%] -top-[20%] w-[300px] h-[300px] rounded-full blur-[100px] opacity-15"
+          :style="{ background: activeBanner.orbColor }"></div>
       </div>
       <!-- Dots navigation -->
       <div class="absolute bottom-4 left-8 flex gap-1.5 z-10">
-        <button
-          v-for="(_, i) in bannerSlides"
-          :key="i"
-          @click="bannerIndex = i"
-          :class="['w-2 h-2 rounded-full transition-all duration-200', bannerIndex === i ? 'bg-accent w-5' : 'bg-white/20']"
-        />
+        <button v-for="(_, i) in bannerSlides" :key="i" @click="bannerIndex = i"
+          :class="['w-2 h-2 rounded-full transition-all duration-200', bannerIndex === i ? 'bg-accent w-5' : 'bg-white/20']" />
       </div>
     </div>
 
@@ -55,12 +50,9 @@
       <h3 class="font-heading text-base font-black text-text-primary">Core Features</h3>
     </div>
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <button
-        v-for="t in aiToolsList"
-        :key="t.title"
+      <button v-for="t in aiToolsList" :key="t.title"
         class="glass-card p-5 text-center flex flex-col items-center justify-center h-[160px] transition-all duration-200 hover:bg-white/[0.03] hover:-translate-y-0.5 cursor-pointer"
-        @click="$emit('show-feature', t.title)"
-      >
+        @click="$emit('show-feature', t.title)">
         <div class="w-11 h-11 rounded-lg border border-border bg-white/[0.02] flex items-center justify-center mb-3">
           <component :is="t.icon" :size="18" class="text-accent" />
         </div>

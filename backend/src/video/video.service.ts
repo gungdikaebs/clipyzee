@@ -96,6 +96,38 @@ export class VideoService {
     return job;
   }
 
+  async updateClips(videoId: string, clips: any[]) {
+    const analyzeJob = await this.prisma.job.findFirst({
+      where: {
+        videoId: videoId,
+        type: 'ANALYZE',
+        status: 'COMPLETED'
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    if (!analyzeJob) {
+      throw new Error(`No completed ANALYZE job found for video ID: ${videoId}`);
+    }
+
+    const currentResult = (analyzeJob.result as any) || {};
+    const updatedResult = {
+      ...currentResult,
+      clips: clips
+    };
+
+    await this.prisma.job.update({
+      where: { id: analyzeJob.id },
+      data: {
+        result: updatedResult
+      }
+    });
+
+    return { success: true };
+  }
+
   async getHistory() {
     return this.prisma.video.findMany({
       include: {

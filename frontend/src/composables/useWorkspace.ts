@@ -127,7 +127,7 @@ const pollRenderJob = (jobId: string, clip: ClipCandidate) => {
             clearInterval(checkInterval)
             clip.isDownloading = false
             appendLog(`[RENDER DONE] Fast yt-dlp snippet downloaded! Fetching file...`)
-            window.location.href = `${API_BASE}/video/download?path=${encodeURIComponent(data.result.filePath)}`
+            window.location.href = `${API_BASE}/video/download?path=${encodeURIComponent(data.result.filePath)}&download=true`
          } else if (data.status === 'FAILED') {
             clearInterval(checkInterval)
             clip.isDownloading = false
@@ -177,6 +177,25 @@ const downloadClip = async (clip: ClipCandidate) => {
    }
 }
 
+const saveWorkspaceState = async () => {
+  if (!currentVideoId.value || clips.value.length === 0) return;
+  try {
+    const res = await fetch(`${API_BASE}/video/update-clips`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        videoId: currentVideoId.value,
+        clips: clips.value
+      })
+    });
+    if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
+    appendLog(`[WORKSPACE] Workspace state successfully synchronized to database.`);
+  } catch (e: any) {
+    console.error('Failed to sync workspace state to DB:', e);
+    appendLog(`[ERROR] Failed to save workspace state: ${e.message}`);
+  }
+}
+
 const formatTime = (seconds: number): string => {
   const m = Math.floor(seconds / 60)
   const s = Math.floor(seconds % 60)
@@ -207,6 +226,7 @@ export function useWorkspace() {
     pollAnalysisJob,
     pollExtractJob,
     downloadClip,
-    openPreview
+    openPreview,
+    saveWorkspaceState
   }
 }

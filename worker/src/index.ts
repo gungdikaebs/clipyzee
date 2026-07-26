@@ -108,11 +108,16 @@ const handleAnalyzeJob = async (job: Job) => {
             // 3.2 Transcribe Local Chunk
             const chunkTranscript = await transcribeAudio(tempAudioExtractPath, lang);
 
-            // 3.3 Apply Offset
+            // 3.3 Apply Offset (including word-level timestamps)
             const offsetTranscript = chunkTranscript.map(seg => ({
                 ...seg,
                 start: seg.start + currentTime,
-                end: seg.end + currentTime
+                end: seg.end + currentTime,
+                words: seg.words ? seg.words.map((w: any) => ({
+                    ...w,
+                    start: Number(w.start) + currentTime,
+                    end: Number(w.end) + currentTime
+                })) : undefined
             }));
 
             fullTranscript = fullTranscript.concat(offsetTranscript);
@@ -235,6 +240,37 @@ const handleRenderJob = async (job: Job) => {
             console.log(`[Render] [Bypass] Extracting raw clip only from YouTube...`);
             finalFilePath = await downloadClip(url, outputDir, jobId, start, end);
             
+            // Sync download path to database immediately so it is reusable
+            try {
+                const parentJob = await prisma.job.findFirst({
+                    where: { videoId: videoId, type: 'ANALYZE', status: 'COMPLETED' },
+                    orderBy: { createdAt: 'desc' }
+                });
+
+                if (parentJob && parentJob.result && (parentJob.result as any).clips) {
+                    const clipsList = (parentJob.result as any).clips;
+                    const updatedClips = clipsList.map((clip: any) => {
+                        if (Math.abs(Number(clip.start) - Number(start)) < 1.0 && Math.abs(Number(clip.end) - Number(end)) < 1.0) {
+                            return { ...clip, rawVideoPath: finalFilePath };
+                        }
+                        return clip;
+                    });
+
+                    await prisma.job.update({
+                        where: { id: parentJob.id },
+                        data: {
+                            result: {
+                                ...(parentJob.result as any),
+                                clips: updatedClips
+                            }
+                        }
+                    });
+                    console.log(`[Render] [DB Sync] Persisted rawVideoPath to parent job result: ${finalFilePath}`);
+                }
+            } catch (err: any) {
+                console.error(`[Render] [DB Sync Failed] Could not update parent job clips:`, err.message);
+            }
+
             await prisma.job.update({
                 where: { id: jobId },
                 data: {
@@ -285,6 +321,37 @@ const handleRenderJob = async (job: Job) => {
         } else {
             console.log(`[Render] Downloading video clip from YouTube...`);
             downloadedFilePath = await downloadClip(url, outputDir, jobId, start, end);
+
+            // Sync download path to database immediately so it is reusable
+            try {
+                const parentJob = await prisma.job.findFirst({
+                    where: { videoId: videoId, type: 'ANALYZE', status: 'COMPLETED' },
+                    orderBy: { createdAt: 'desc' }
+                });
+
+                if (parentJob && parentJob.result && (parentJob.result as any).clips) {
+                    const clipsList = (parentJob.result as any).clips;
+                    const updatedClips = clipsList.map((clip: any) => {
+                        if (Math.abs(Number(clip.start) - Number(start)) < 1.0 && Math.abs(Number(clip.end) - Number(end)) < 1.0) {
+                            return { ...clip, rawVideoPath: downloadedFilePath };
+                        }
+                        return clip;
+                    });
+
+                    await prisma.job.update({
+                        where: { id: parentJob.id },
+                        data: {
+                            result: {
+                                ...(parentJob.result as any),
+                                clips: updatedClips
+                            }
+                        }
+                    });
+                    console.log(`[Render] [DB Sync] Persisted downloadedFilePath to parent job result: ${downloadedFilePath}`);
+                }
+            } catch (err: any) {
+                console.error(`[Render] [DB Sync Failed] Could not update parent job clips:`, err.message);
+            }
         }
 
         if (transcript.length > 0) {

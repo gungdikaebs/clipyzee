@@ -257,7 +257,8 @@ const {
   extractionProgress,
   API_BASE,
   appendLog,
-  pollExtractJob
+  pollExtractJob,
+  saveWorkspaceState
 } = useWorkspace()
 
 onMounted(async () => {
@@ -340,6 +341,7 @@ const openEditor = async (clip: ClipCandidate, index: number) => {
       extractionProgress.value = 'Downloading clip from YouTube...'
       const rawPath = await pollExtractJob(data.jobId)
       clip.rawVideoPath = rawPath
+      await saveWorkspaceState()
     } catch (err: any) {
       appendLog(`[ERROR] Raw clip extraction failed: ${err.message}`)
       isExtractingVideo.value = false

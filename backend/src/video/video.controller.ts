@@ -28,8 +28,21 @@ export class VideoController {
     return this.videoService.getJobStatus(id);
   }
 
+  @Post('update-clips')
+  updateClips(@Body() body: { videoId: string; clips: any[] }) {
+    return this.videoService.updateClips(body.videoId, body.clips);
+  }
+
   @Get('download')
-  downloadFile(@Query('path') filePath: string, @Res() res: Response) {
-    res.sendFile(filePath);
+  downloadFile(
+    @Query('path') filePath: string,
+    @Query('download') download: string,
+    @Res() res: Response
+  ) {
+    if (download === 'true') {
+      res.download(filePath);
+    } else {
+      res.sendFile(filePath);
+    }
   }
 }

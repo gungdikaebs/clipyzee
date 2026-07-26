@@ -329,7 +329,8 @@ const {
   history,
   activeClip,
   appendLog,
-  downloadClip
+  downloadClip,
+  saveWorkspaceState
 } = useWorkspace()
 
 const isLoaded = ref(false)
@@ -835,11 +836,22 @@ const onDragEnd = () => {
   window.removeEventListener('mouseup', onDragEnd)
 }
 
-const onClose = () => {
+const onClose = async () => {
+  const idx = Number(props.clipIndex)
+  if (idx !== null && idx >= 0 && idx < clips.value.length) {
+    const clip = clips.value[idx]
+    if (clip) {
+      clip.customTranscript = editingSegments.value
+      clip.aspectRatio = editorState.value.aspectRatio
+      clip.subtitleStyle = editorState.value.subtitleStyle
+      clip.cropX = editorState.value.cropX
+      await saveWorkspaceState()
+    }
+  }
   router.push(`/studio/candidates/${props.videoId}`)
 }
 
-const onRender = () => {
+const onRender = async () => {
   const idx = Number(props.clipIndex)
   if (idx !== null && idx >= 0 && idx < clips.value.length) {
     const clip = clips.value[idx]
@@ -851,6 +863,7 @@ const onRender = () => {
       clip.isEdited = true
       appendLog(`[EDITOR] Saved clip #${idx + 1} configuration`)
       
+      await saveWorkspaceState()
       router.push(`/studio/candidates/${props.videoId}`)
       downloadClip(clip)
     }
